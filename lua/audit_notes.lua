@@ -190,7 +190,7 @@ function M.edit()
   local bufnr = api.nvim_get_current_buf()
   local note = find_closest_note(bufnr, api.nvim_win_get_cursor(0)[1])
   if not note then vim.notify("[audit] no note near cursor", vim.log.levels.WARN); return end
-  local new = fn.input("Edit note: ", note.text:gsub("\n", "\\n"))
+  local new = fn.input("Edit note: ", (note.text:gsub("\n", "\\n")))
   if new == "" then return end
   note.text = new:gsub("\\n", "\n")
   note.timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
