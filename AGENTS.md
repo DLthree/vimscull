@@ -18,9 +18,8 @@ nvim --headless -u NONE --cmd 'set rtp+=.' -l tests/run_tests.lua
 
 Exit code is non-zero on failure.
 
-## Code style
+## Structure
 
-- 2-space indentation
-- Module pattern: `local M = {}` returned at end of file
-- Private helpers are `local function`s, public API lives on `M`
-- No linter or formatter configured; match existing style
+- `lua/audit_notes.lua` — core module: storage, extmarks, note CRUD
+- `plugin/audit_notes.lua` — plugin loader and user command registration
+- `tests/run_tests.lua` — headless test suite
