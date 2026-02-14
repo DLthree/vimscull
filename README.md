@@ -2,6 +2,10 @@
 
 Persistent, collaborative audit annotations for Neovim — rendered inline as virtual lines using extmarks.
 
+## Demo
+
+![Annotation Tutorial — add, edit, delete](demo/annotation-tutorial.svg)
+
 ## Features
 
 - Inline virtual-line annotations that follow code through edits (extmark-anchored).
