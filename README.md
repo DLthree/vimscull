@@ -1,14 +1,21 @@
 # vimscull
 
-Persistent, collaborative audit annotations for Neovim — rendered inline as virtual lines using extmarks.
+Persistent, collaborative audit annotations and code flow highlighting for Neovim — rendered inline using extmarks.
 
-## Demo
+## Demos
+
+### Annotations
 
 ![Annotation Tutorial — add, edit, delete](demo/annotation-tutorial.svg)
 
+### Flows
+
+![Flow Tutorial — create, navigate, switch](demo/flow-tutorial.svg)
+
 ## Features
 
-- Inline virtual-line annotations that follow code through edits (extmark-anchored).
+- **Annotations**: Inline virtual-line annotations that follow code through edits (extmark-anchored).
+- **Flows**: Named sequences of highlighted code locations with colored text and parent/child navigation.
 - Shared JSON storage designed to be committed to git.
 - Multi-line notes, multiple notes per line, toggle visibility.
 - Per-file markdown export.
@@ -30,6 +37,9 @@ Persistent, collaborative audit annotations for Neovim — rendered inline as vi
       -- icon         = "📝",
       -- max_line_len = 120,
     })
+    require("flows").setup({
+      -- storage_path = "/custom/path/flows.json",
+    })
   end,
 }
 ```
@@ -41,6 +51,7 @@ use {
   "your-user/vimscull",
   config = function()
     require("audit_notes").setup()
+    require("flows").setup()
   end,
 }
 ```
@@ -51,9 +62,12 @@ Clone this repo into your Neovim runtime path (e.g. `~/.config/nvim/pack/plugins
 
 ```lua
 require("audit_notes").setup()
+require("flows").setup()
 ```
 
 ## Configuration
+
+### Annotations
 
 ```lua
 require("audit_notes").setup({
@@ -65,7 +79,17 @@ require("audit_notes").setup({
 })
 ```
 
+### Flows
+
+```lua
+require("flows").setup({
+  storage_path = nil,        -- auto: <git_root>/.audit/flows.json or ~/.local/state/nvim/flows.json
+})
+```
+
 ## Commands
+
+### Annotation commands
 
 | Command | Description |
 |---|---|
@@ -80,30 +104,59 @@ require("audit_notes").setup({
 
 Use `\n` in note text to create multi-line annotations.
 
+### Flow commands
+
+| Command | Description |
+|---|---|
+| `:FlowCreate [name]` | Create a new flow (becomes the active flow) |
+| `:FlowDelete` | Delete the active flow (with confirmation) |
+| `:FlowSelect` | Open floating window to pick, create, or delete flows |
+| `:FlowAddNode` | Add visual selection as a node to the active flow (prompts for color) |
+| `:FlowDeleteNode` | Remove the closest node near cursor from the active flow |
+| `:FlowNext` | Jump to the next (child) node in the active flow |
+| `:FlowPrev` | Jump to the previous (parent) node in the active flow |
+| `:FlowList` | Open a scratch buffer listing nodes; `<CR>` jumps to location |
+
+Available highlight colors: Red, Blue, Green, Yellow, Cyan, Magenta.
+
 ## Example keymaps
 
 ```lua
+-- Annotations
 vim.keymap.set("n", "<leader>aa", "<cmd>AuditAdd<cr>",    { desc = "Add audit note" })
 vim.keymap.set("n", "<leader>ae", "<cmd>AuditEdit<cr>",   { desc = "Edit audit note" })
 vim.keymap.set("n", "<leader>ad", "<cmd>AuditDelete<cr>", { desc = "Delete audit note" })
 vim.keymap.set("n", "<leader>al", "<cmd>AuditList<cr>",   { desc = "List audit notes" })
 vim.keymap.set("n", "<leader>at", "<cmd>AuditToggle<cr>", { desc = "Toggle audit notes" })
 vim.keymap.set("n", "<leader>as", "<cmd>AuditShow<cr>",   { desc = "Show full note" })
+
+-- Flows
+vim.keymap.set("n", "<leader>fc", "<cmd>FlowCreate<cr>",     { desc = "Create flow" })
+vim.keymap.set("n", "<leader>fs", "<cmd>FlowSelect<cr>",     { desc = "Select flow" })
+vim.keymap.set("v", "<leader>fa", ":<C-u>FlowAddNode<cr>",   { desc = "Add flow node" })
+vim.keymap.set("n", "<leader>fd", "<cmd>FlowDeleteNode<cr>", { desc = "Delete flow node" })
+vim.keymap.set("n", "<leader>fn", "<cmd>FlowNext<cr>",       { desc = "Next flow node" })
+vim.keymap.set("n", "<leader>fp", "<cmd>FlowPrev<cr>",       { desc = "Prev flow node" })
+vim.keymap.set("n", "<leader>fl", "<cmd>FlowList<cr>",       { desc = "List flow nodes" })
 ```
 
 ## How it works
 
-### Extmarks as anchors
+### Annotations — extmarks as anchors
 
 Each note is attached to a buffer position via `nvim_buf_set_extmark`. Extmarks are Neovim's mechanism for tracking positions through buffer edits — when lines are inserted, deleted, or moved, the extmark follows automatically. This means a note placed on line 42 will stay attached to that logical line even after surrounding edits, without any diff-tracking or line-number patching.
 
 The extmark renders the annotation as one or more **virtual lines** below the anchored source line (`virt_lines` option). These lines are purely visual — the buffer text is never modified.
 
+### Flows — inline highlights with navigation
+
+A flow is a named, ordered list of code locations (file, line, column range). Each node in a flow highlights the specified text range with a colored background using extmarks with `hl_group`. Only one flow is active at a time — switching flows swaps the highlights across all open buffers.
+
+Nodes have a parent/child relationship defined by their order in the flow. `:FlowNext` moves to the child node, `:FlowPrev` moves to the parent, wrapping around at the ends. Navigation works across files — jumping to a node in a different file opens that file automatically.
+
 ### JSON sync and persistence
 
-Notes are stored in a plain JSON file keyed by absolute file path. Each note records a `line` and `col` for human readability and diffing, but these are **metadata only** — the extmark is the authoritative position during a session.
-
-On `BufWritePost`, the plugin reads each note's current extmark position (`nvim_buf_get_extmark_by_id`) and writes the updated line/col back to the JSON. This keeps the JSON useful for code review and git diffs even though extmarks are ephemeral (they only exist in the running Neovim session).
+Notes are stored in `.audit/notes.json`, flows in `.audit/flows.json`. Both are plain JSON files designed for git storage. On `BufWritePost`, the plugin syncs live extmark positions back to JSON.
 
 **Edge cases:**
 - **Deleted lines**: If text containing an extmark is deleted, Neovim collapses the extmark to the nearest valid position. The note remains; it just moves.
@@ -111,6 +164,8 @@ On `BufWritePost`, the plugin reads each note's current extmark position (`nvim_
 - **Reloading**: On `BufReadPost`, notes are re-placed from JSON line numbers. Between sessions, line numbers are the fallback anchor. If the file changed outside Neovim, notes may land on slightly wrong lines (same limitation as any line-based bookmark).
 
 ## Storage format
+
+### Annotations
 
 ```json
 {
@@ -124,6 +179,30 @@ On `BufWritePost`, the plugin reads each note's current extmark position (`nvim_
       "col": 0
     }
   ]
+}
+```
+
+### Flows
+
+```json
+{
+  "flows": [
+    {
+      "id": "a1b2c3d4-...",
+      "name": "Security Audit",
+      "nodes": [
+        {
+          "id": "e5f6g7h8-...",
+          "file": "/absolute/path/to/file.py",
+          "line": 10,
+          "col_start": 4,
+          "col_end": 20,
+          "color": "FlowRed"
+        }
+      ]
+    }
+  ],
+  "active_flow_id": "a1b2c3d4-..."
 }
 ```
 

@@ -42,3 +42,36 @@ svg-term \
 ```
 
 Place above the `## Features` section. The SVG auto-plays inline on GitHub with no external dependencies.
+
+---
+
+## Building the flow-tutorial demo
+
+### Recording the cast (automated)
+
+```bash
+python3 demo/record_flow_tutorial.py
+```
+
+This script uses `pexpect` to drive a full Neovim session that:
+
+1. Creates a "Security Audit" flow with 3 nodes across the request pipeline
+2. Navigates between nodes with `:FlowNext` / `:FlowPrev`
+3. Creates a second "Bug: Negative Transfer" flow with different nodes
+4. Switches between flows with `:FlowSelect` to show highlights change
+5. Lists nodes with `:FlowList`
+
+### Converting to animated SVG
+
+```bash
+svg-term \
+  --in  demo/flow-tutorial.cast \
+  --out demo/flow-tutorial.svg \
+  --window --no-cursor --padding 10
+```
+
+### Embedding in README
+
+```markdown
+![Flow Tutorial — create, navigate, switch](demo/flow-tutorial.svg)
+```
