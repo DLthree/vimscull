@@ -155,21 +155,11 @@ if server_job and server_job > 0 then
     numscull.setup({ config_dir = config_dir, identity = TEST_IDENTITY, auto_fetch = false })
     local ok, err = numscull.connect("127.0.0.1", TEST_PORT)
     assert_true("connect + init", ok, err)
-    local pcall_ok, proj_result, proj_err = pcall(function()
-      return numscull.create_project("test-proj", "/tmp/test", TEST_IDENTITY)
-    end)
-    if not pcall_ok and proj_result and tostring(proj_result):find("timeout") then
-      report_skip("create project", "encrypted RPC may hang in headless -l mode")
-      report_skip("change project", "depends on create project")
-    elseif pcall_ok then
-      assert_true("create project", proj_err == nil, proj_err)
-      local chg_ok, chg_err = numscull.change_project("test-proj")
-      assert_true("change project", chg_err == nil, chg_err)
-      integration_ok = true
-    else
-      report("create project", false, tostring(proj_result))
-      report("change project", false, "skipped")
-    end
+    local proj_result, proj_err = numscull.create_project("test-proj", "/tmp/test", TEST_IDENTITY)
+    assert_true("create project", proj_err == nil, proj_err)
+    local chg_ok, chg_err = numscull.change_project("test-proj")
+    assert_true("change project", chg_err == nil, chg_err)
+    integration_ok = true
   end
 
   if integration_ok then

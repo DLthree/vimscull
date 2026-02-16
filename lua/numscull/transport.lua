@@ -25,6 +25,7 @@ function M.connect(host, port)
   local read_want = nil
   local read_co = nil
   local read_result = nil
+  local read_err_val = nil
   local write_co = nil
   local main_co = nil
   local transport_result = nil
@@ -43,8 +44,13 @@ function M.connect(host, port)
       return data
     end
     read_want = n
+    read_result = nil
+    read_err_val = nil
     read_co = coroutine.running()
     coroutine.yield()
+    if read_err_val then
+      error("read failed: " .. tostring(read_err_val))
+    end
     return read_result
   end
 
@@ -124,8 +130,14 @@ function M.connect(host, port)
 
   transport_ref.run_sync = function(fn)
     local result
+    local fn_err = nil
     local co = coroutine.create(function()
-      result = fn()
+      local ok, ret = pcall(fn)
+      if ok then
+        result = ret
+      else
+        fn_err = ret
+      end
     end)
     local ok, err = coroutine.resume(co)
     if not ok then
@@ -144,6 +156,9 @@ function M.connect(host, port)
     timer:close()
     if timeout_flag then
       error("run_sync: timeout after " .. timeout_ms .. "ms")
+    end
+    if fn_err then
+      error("run_sync: " .. tostring(fn_err))
     end
     return result
   end
@@ -173,7 +188,8 @@ function M.connect(host, port)
           read_co = nil
           read_want = nil
           read_result = nil
-          coroutine.resume(co, nil, read_err)
+          read_err_val = tostring(read_err)
+          coroutine.resume(co)
         end
         return
       end
@@ -191,12 +207,13 @@ function M.connect(host, port)
         end
       end
       if not chunk then
-        -- EOF
         if read_co then
           local co = read_co
           read_co = nil
           read_want = nil
-          coroutine.resume(co, nil, "EOF")
+          read_result = nil
+          read_err_val = "EOF"
+          coroutine.resume(co)
         end
       end
     end)

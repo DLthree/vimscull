@@ -74,20 +74,32 @@ class EncryptedChannel:
         self.send_nonce = 1
         self.recv_nonce = 1
 
-    def send(self, message: dict) -> None:
+    def _send_block(self, data: bytes) -> None:
+        """Encrypt and send a single block with a 2-byte LE length prefix."""
         import struct
-        json_bytes = json.dumps(message).encode("utf-8")
-        framed = pack_plaintext_bytes(json_bytes)
-        if len(framed) > BLOCK_SIZE - 2:
-            raise ValueError(f"Message too large")
         block = bytearray(BLOCK_SIZE)
-        struct.pack_into("<H", block, 0, len(framed))
-        block[2:2 + len(framed)] = framed
-        block[2 + len(framed):] = os.urandom(BLOCK_SIZE - 2 - len(framed))
+        struct.pack_into("<H", block, 0, len(data))
+        block[2:2 + len(data)] = data
+        remaining = BLOCK_SIZE - 2 - len(data)
+        if remaining > 0:
+            block[2 + len(data):] = os.urandom(remaining)
         nonce = counter_nonce(self.send_nonce)
         self.send_nonce += 1
         ct = crypto_box(bytes(block), nonce, self.theirs_send_pk, self.ours_send_sk)
         self.sock.sendall(ct)
+
+    def send(self, message: dict) -> None:
+        json_bytes = json.dumps(message).encode("utf-8")
+        framed = pack_plaintext_bytes(json_bytes)
+        max_payload = BLOCK_SIZE - 2
+        if len(framed) <= max_payload:
+            self._send_block(framed)
+        else:
+            offset = 0
+            while offset < len(framed):
+                chunk = framed[offset:offset + max_payload]
+                self._send_block(chunk)
+                offset += max_payload
 
     def recv(self) -> dict:
         import struct
