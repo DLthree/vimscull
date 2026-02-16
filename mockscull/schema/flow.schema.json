@@ -1,0 +1,493 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Numscull Flow Module Schema",
+  "description": "JSON-RPC schemas for the flow module (directed code-location graphs).",
+  "type": "object",
+  "definitions": {
+    "TextDocumentRange": {
+      "description": "A range in a text document (file, line, column span).",
+      "type": "object",
+      "properties": {
+        "fileId": {
+          "type": "object",
+          "properties": { "uri": { "type": "string" } },
+          "required": ["uri"]
+        },
+        "line": { "type": "integer" },
+        "startCol": { "type": "integer" },
+        "endCol": { "type": "integer" }
+      },
+      "required": ["fileId", "line", "startCol", "endCol"]
+    },
+    "FlowInfo": {
+      "description": "Metadata for a flow (name, description, author, dates).",
+      "type": "object",
+      "properties": {
+        "infoId": { "type": "integer" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "modifiedBy": { "type": "string" },
+        "createdDate": { "type": "string" },
+        "modifiedDate": { "type": "string" }
+      },
+      "required": ["infoId", "name", "description", "author", "modifiedBy", "createdDate", "modifiedDate"]
+    },
+    "FlowNode": {
+      "description": "A node in a flow with location, note, color, and edges.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "$ref": "#/definitions/TextDocumentRange" },
+        "note": { "type": "string" },
+        "color": { "type": "string" },
+        "outEdges": { "type": "array", "items": { "type": "integer" } },
+        "inEdges": { "type": "array", "items": { "type": "integer" } },
+        "link": { "type": "integer" },
+        "orphaned": { "type": "string" }
+      },
+      "required": ["location", "note", "color", "outEdges", "inEdges"]
+    },
+    "Flow": {
+      "description": "A complete flow with info and nodes (keyed by nodeId).",
+      "type": "object",
+      "properties": {
+        "info": { "$ref": "#/definitions/FlowInfo" },
+        "nodes": { "type": "object", "additionalProperties": { "$ref": "#/definitions/FlowNode" } }
+      },
+      "required": ["info", "nodes"]
+    },
+    "AddNode": {
+      "description": "Params for flow/add/node. Required: location, note, color. Optional: flowId, parentId, childId, name, link, orphaned.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "$ref": "#/definitions/TextDocumentRange" },
+        "note": { "type": "string" },
+        "color": { "type": "string" },
+        "flowId": { "type": "integer" },
+        "parentId": { "type": "integer" },
+        "childId": { "type": "integer" },
+        "link": { "type": "integer" },
+        "orphaned": { "type": "string" }
+      },
+      "required": ["location", "note", "color"]
+    },
+    "ForkNode": {
+      "description": "Params for flow/fork/node. Required: location, note, color, parentId. Optional: name, link, orphaned.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "$ref": "#/definitions/TextDocumentRange" },
+        "note": { "type": "string" },
+        "color": { "type": "string" },
+        "parentId": { "type": "integer" },
+        "link": { "type": "integer" },
+        "orphaned": { "type": "string" }
+      },
+      "required": ["location", "note", "color", "parentId"]
+    }
+  },
+  "oneOf": [
+    {
+      "title": "flow/get/all request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/get/all" },
+        "params": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/get/all response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/get/all" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowInfos": { "type": "array", "items": { "$ref": "#/definitions/FlowInfo" } }
+          },
+          "required": ["flowInfos"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/create request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/create" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "createdDate": { "type": "string" }
+          },
+          "required": ["name", "description", "createdDate"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/create response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/create" },
+        "result": {
+          "type": "object",
+          "properties": { "flow": { "$ref": "#/definitions/Flow" } },
+          "required": ["flow"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/get request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/get" },
+        "params": {
+          "type": "object",
+          "properties": { "flowId": { "type": "integer" } },
+          "required": ["flowId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/get response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/get" },
+        "result": {
+          "type": "object",
+          "properties": { "flow": { "$ref": "#/definitions/Flow" } },
+          "required": ["flow"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/set request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/set" },
+        "params": {
+          "type": "object",
+          "properties": { "flow": { "$ref": "#/definitions/Flow" } },
+          "required": ["flow"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/set response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/set" },
+        "result": {
+          "type": "object",
+          "properties": { "flow": { "$ref": "#/definitions/Flow" } },
+          "required": ["flow"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/set/info request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/set/info" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "flowId": { "type": "integer" },
+            "name": { "type": "string" },
+            "description": { "type": "string" },
+            "modifiedDate": { "type": "string" }
+          },
+          "required": ["flowId", "name", "description", "modifiedDate"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/set/info response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/set/info" },
+        "result": {
+          "type": "object",
+          "properties": { "info": { "$ref": "#/definitions/FlowInfo" } },
+          "required": ["info"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/linked/to request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/linked/to" },
+        "params": {
+          "type": "object",
+          "properties": { "flowId": { "type": "integer" } },
+          "required": ["flowId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/linked/to response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/linked/to" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowIds": { "type": "array", "items": { "type": "integer" } }
+          },
+          "required": ["flowIds"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/unlock request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/unlock" },
+        "params": {
+          "type": "object",
+          "properties": { "flowId": { "type": "integer" } },
+          "required": ["flowId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/unlock response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/unlock" },
+        "result": {
+          "type": "object",
+          "properties": { "flowId": { "type": "integer" } },
+          "required": ["flowId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/add/node request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/add/node" },
+        "params": { "$ref": "#/definitions/AddNode" }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/add/node response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/add/node" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowId": { "type": "integer" },
+            "nodeId": { "type": "integer" }
+          },
+          "required": ["flowId", "nodeId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/fork/node request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/fork/node" },
+        "params": { "$ref": "#/definitions/ForkNode" }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/fork/node response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/fork/node" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowId": { "type": "integer" },
+            "nodeId": { "type": "integer" }
+          },
+          "required": ["flowId", "nodeId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/set/node request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/set/node" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "nodeId": { "type": "integer" },
+            "node": { "$ref": "#/definitions/FlowNode" }
+          },
+          "required": ["nodeId", "node"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/set/node response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/set/node" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowId": { "type": "integer" },
+            "nodeId": { "type": "integer" }
+          },
+          "required": ["flowId", "nodeId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/remove/node request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/remove/node" },
+        "params": {
+          "type": "object",
+          "properties": { "nodeId": { "type": "integer" } },
+          "required": ["nodeId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/remove/node response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/remove/node" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowId": { "type": "integer" },
+            "nodeId": { "type": "integer" }
+          },
+          "required": ["flowId", "nodeId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/remove request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/remove" },
+        "params": {
+          "type": "object",
+          "properties": { "flowId": { "type": "integer" } },
+          "required": ["flowId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "flow/remove response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "flow/remove" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "flowId": { "type": "integer" },
+            "linkedFlows": { "type": "array", "items": { "type": "integer" } }
+          },
+          "required": ["flowId", "linkedFlows"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    }
+  ]
+}

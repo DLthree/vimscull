@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+
+# Test fixtures (generated at runtime, contain secrets)
+tests/.test_config
+tests/.test_server.log
+sample-config/dbs/

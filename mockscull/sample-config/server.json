@@ -1,0 +1,33 @@
+{
+  "max_connected_users_per_project": 1,
+  "max_users_per_project": 1,
+  "max_user_4k_buffers": 1024,
+  "max_projects": 100,
+  "port": 5000,
+  "listen_address": "127.0.0.1",
+  "projects": [
+    {
+      "db": "test",
+      "visibility": "visible",
+      "initial_permissions": {
+        "write": true,
+        "add_user": true,
+        "remove_user": true,
+        "change_permissions": true,
+        "delete_project": true
+      },
+      "users": [
+        {
+          "identity": "python-client",
+          "permissions": {
+            "write": true,
+            "add_user": true,
+            "remove_user": true,
+            "change_permissions": true,
+            "delete_project": true
+          }
+        }
+      ]
+    }
+  ]
+}

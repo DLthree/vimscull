@@ -1,0 +1,370 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Numscull Control Module",
+  "description": "JSON-RPC schemas for the control module (identity, projects, subscriptions).",
+  "type": "object",
+  "oneOf": [
+    {
+      "title": "control/init request",
+      "description": "Plaintext phase; triggers key exchange. Params: identity, version.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/init" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "identity": { "type": "string" },
+            "version": { "type": "string" }
+          },
+          "required": ["identity", "version"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/init response",
+      "description": "Server returns params (not result) for plaintext init. Contains valid, publicKey (base64 bytes).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/init" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "valid": { "type": "boolean" },
+            "publicKey": {
+              "type": "object",
+              "properties": { "bytes": { "type": "string" } },
+              "required": ["bytes"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["valid", "publicKey"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/subscribe request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/subscribe" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "channels": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          },
+          "required": ["channels"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/subscribe response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/subscribe" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "channels": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          },
+          "required": ["channels"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/unsubscribe request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/unsubscribe" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "channels": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          },
+          "required": ["channels"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/unsubscribe response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/unsubscribe" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "channels": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          },
+          "required": ["channels"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/list/project request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/list/project" },
+        "params": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/list/project response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/list/project" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "projects": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "repository": { "type": "string" },
+                  "ownerIdentity": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["projects"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/create/project request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/create/project" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "repository": { "type": "string" },
+            "ownerIdentity": { "type": "string" }
+          },
+          "required": ["name", "repository", "ownerIdentity"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/create/project response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/create/project" },
+        "result": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/change/project request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/change/project" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/change/project response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/change/project" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/remove/project request",
+      "description": "Remove a project by name.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/remove/project" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" }
+          },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/remove/project response",
+      "$comment": "Removing the currently active project disconnects the client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/remove/project" },
+        "result": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/add/user/server request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/add/user/server" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "identity": { "type": "string" },
+            "publicKey": {
+              "type": "object",
+              "properties": { "bytes": { "type": "string" } },
+              "required": ["bytes"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["identity", "publicKey"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/add/user/server response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/add/user/server" },
+        "result": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/add/user/project request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/add/user/project" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string" },
+            "identity": { "type": "string" },
+            "permissions": { "type": ["object", "null"] }
+          },
+          "required": ["project", "identity"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/add/user/project response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/add/user/project" },
+        "result": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/exit request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/exit" },
+        "params": { "type": "object", "additionalProperties": false }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    {
+      "title": "control/error response",
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "method": { "const": "control/error" },
+        "result": {
+          "type": "object",
+          "properties": {
+            "reason": { "type": "string" }
+          },
+          "required": ["reason"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "result"],
+      "additionalProperties": false
+    }
+  ]
+}

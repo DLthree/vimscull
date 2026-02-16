@@ -1,0 +1,365 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Numscull Notes Module",
+  "description": "JSON-RPC schemas for the notes module (tagged line annotations).",
+  "type": "object",
+  "definitions": {
+    "TextDocumentIdentifier": {
+      "description": "File reference by URI.",
+      "type": "object",
+      "properties": {
+        "uri": { "type": "string" }
+      },
+      "required": ["uri"],
+      "additionalProperties": false
+    },
+    "TextDocumentLineParam": {
+      "description": "File and line location for a note.",
+      "type": "object",
+      "properties": {
+        "fileId": { "$ref": "#/definitions/TextDocumentIdentifier" },
+        "line": { "type": "integer" }
+      },
+      "required": ["fileId", "line"],
+      "additionalProperties": false
+    },
+    "Page": {
+      "description": "Pagination: index (0-based) and size.",
+      "type": "object",
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "size": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["index", "size"],
+      "additionalProperties": false,
+      "examples": [{ "index": 0, "size": 20 }]
+    },
+    "Note": {
+      "description": "A note as returned by the server (author/modifiedBy filled from identity).",
+      "type": "object",
+      "properties": {
+        "location": { "$ref": "#/definitions/TextDocumentLineParam" },
+        "text": { "type": "string" },
+        "author": { "type": "string" },
+        "modifiedBy": { "type": "string" },
+        "createdDate": { "type": "string" },
+        "modifiedDate": { "type": "string" },
+        "orphaned": { "type": ["string", "null"] }
+      },
+      "required": ["location", "text", "author", "modifiedBy", "createdDate", "modifiedDate"],
+      "additionalProperties": false
+    },
+    "NoteInput": {
+      "$comment": "For notes/set request only. Do not include author or modifiedBy; server fills from identity.",
+      "type": "object",
+      "properties": {
+        "location": { "$ref": "#/definitions/TextDocumentLineParam" },
+        "text": { "type": "string" },
+        "createdDate": { "type": "string" },
+        "modifiedDate": { "type": "string" },
+        "orphaned": { "type": ["string", "null"] }
+      },
+      "required": ["location", "text", "createdDate", "modifiedDate"],
+      "additionalProperties": false
+    },
+    "TagCount": {
+      "description": "Tag name and count from #hashtag extraction.",
+      "type": "object",
+      "properties": {
+        "tag": { "type": "string" },
+        "count": { "type": "integer" }
+      },
+      "required": ["tag", "count"],
+      "additionalProperties": false
+    },
+    "Filter": {
+      "description": "Filter criteria for notes/search/columns (all fields nullable).",
+      "type": "object",
+      "properties": {
+        "file": { "type": ["string", "null"] },
+        "line": { "type": ["integer", "null"] },
+        "author": { "type": ["string", "null"] },
+        "modifiedBy": { "type": ["string", "null"] },
+        "text": { "type": ["string", "null"] },
+        "createdDate": { "type": ["string", "null"] },
+        "modifiedDate": { "type": ["string", "null"] },
+        "orphaned": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "Order": {
+      "description": "Sort order: by (field) and ordering (ascending/descending).",
+      "type": "object",
+      "properties": {
+        "by": { "enum": ["author","modifiedBy","text","location","createdDate","modifiedDate"] },
+        "ordering": { "enum": ["ascending","descending"] }
+      },
+      "required": ["by", "ordering"],
+      "additionalProperties": false,
+      "examples": [{ "by": "createdDate", "ordering": "descending" }]
+    }
+  },
+  "properties": {
+    "request": {
+      "type": "object",
+      "oneOf": [
+        {
+          "title": "notes/for/file request",
+          "properties": {
+            "method": { "const": "notes/for/file" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "fileId": { "$ref": "#/definitions/TextDocumentIdentifier" },
+                "page": { "$ref": "#/definitions/Page" }
+              },
+              "required": ["fileId"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/remove request",
+          "properties": {
+            "method": { "const": "notes/remove" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "location": { "$ref": "#/definitions/TextDocumentLineParam" }
+              },
+              "required": ["location"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/set request",
+          "$comment": "verifyFileHash is required at params level even when null. Use NoteInput; do not send author or modifiedBy.",
+          "properties": {
+            "method": { "const": "notes/set" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "note": { "$ref": "#/definitions/NoteInput" },
+                "verifyFileHash": { "type": ["string", "null"] }
+              },
+              "required": ["note", "verifyFileHash"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/tag/count request",
+          "properties": { "method": { "const": "notes/tag/count" } },
+          "required": ["method"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/search request",
+          "properties": {
+            "method": { "const": "notes/search" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" },
+                "page": { "$ref": "#/definitions/Page" }
+              },
+              "required": ["text"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/search/tags request",
+          "properties": {
+            "method": { "const": "notes/search/tags" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" },
+                "page": { "$ref": "#/definitions/Page" }
+              },
+              "required": ["text"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/search/columns request",
+          "properties": {
+            "method": { "const": "notes/search/columns" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "filter": { "$ref": "#/definitions/Filter" },
+                "order": { "$ref": "#/definitions/Order" },
+                "page": { "$ref": "#/definitions/Page" }
+              },
+              "required": ["filter"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "params"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "response": {
+      "type": "object",
+      "oneOf": [
+        {
+          "title": "notes/for/file response",
+          "properties": {
+            "method": { "const": "notes/for/file" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "fileId": { "$ref": "#/definitions/TextDocumentIdentifier" },
+                "notes": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/Note" }
+                },
+                "maxPage": { "type": "integer" }
+              },
+              "required": ["fileId", "notes", "maxPage"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/set response",
+          "properties": {
+            "method": { "const": "notes/set" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "note": { "$ref": "#/definitions/Note" },
+                "tagCount": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/TagCount" }
+                }
+              },
+              "required": ["note", "tagCount"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/remove response",
+          "properties": {
+            "method": { "const": "notes/remove" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "location": { "$ref": "#/definitions/TextDocumentLineParam" },
+                "tagCount": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/TagCount" }
+                }
+              },
+              "required": ["location", "tagCount"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/tag/count response",
+          "properties": {
+            "method": { "const": "notes/tag/count" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "tags": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/TagCount" }
+                }
+              },
+              "required": ["tags"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/search response",
+          "properties": {
+            "method": { "const": "notes/search" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "notes": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/Note" }
+                },
+                "maxPage": { "type": "integer" }
+              },
+              "required": ["notes", "maxPage"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/search/tags response",
+          "properties": {
+            "method": { "const": "notes/search/tags" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "notes": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/Note" }
+                },
+                "maxPage": { "type": "integer" }
+              },
+              "required": ["notes", "maxPage"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        },
+        {
+          "title": "notes/search/columns response",
+          "properties": {
+            "method": { "const": "notes/search/columns" },
+            "result": {
+              "type": "object",
+              "properties": {
+                "notes": {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/Note" }
+                },
+                "maxPage": { "type": "integer" }
+              },
+              "required": ["notes", "maxPage"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["method", "result"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": ["request", "response"],
+  "additionalProperties": false
+}
