@@ -206,6 +206,40 @@ Notes are stored in `.audit/notes.json`, flows in `.audit/flows.json`. Both are 
 }
 ```
 
+## Mockscull (reference implementation & schema)
+
+The `mockscull/` directory contains the **reference Python client** and **canonical schemas** for the Numscull protocol. vimscull’s Lua client is a port of this protocol.
+
+### Why it exists
+
+- **Schema source**: JSON schemas in `mockscull/schema/` define the RPC methods, params, and responses for control, notes, and flow. These are the source of truth for wire format and data shapes.
+- **Reference client**: `mockscull/src/numscull/` implements the full protocol (crypto, transport, client). The Lua implementation in `lua/numscull/` mirrors this.
+- **Test harness**: `mockscull/tests/` runs pytest integration tests against a real Numscull server (or the mock server in `tests/mock_server.py`). These tests validate schema compliance and client behavior.
+
+### What is available
+
+| Path | Purpose |
+|------|---------|
+| `mockscull/schema/control.schema.json` | Control module: init, projects, subscribe, exit |
+| `mockscull/schema/notes.schema.json` | Notes module: set, for/file, remove, search, tag/count |
+| `mockscull/schema/flow.schema.json` | Flow module: create, get, add/node, fork/node, etc. |
+| `mockscull/src/numscull/client.py` | `NumscullClient` — all RPC methods |
+| `mockscull/src/numscull/crypto.py` | NaCl Box, key exchange, `EncryptedChannel` |
+| `mockscull/src/numscull/transport.py` | Wire framing (plaintext init, 528-byte encrypted blocks) |
+| `mockscull/tests/test_control.py` | Control integration tests |
+| `mockscull/tests/test_notes.py` | Notes integration tests |
+| `mockscull/tests/test_flow.py` | Flow integration tests |
+| `mockscull/tests/test_schema.py` | JSON Schema validation tests |
+
+### Verifying schema and client implementation
+
+1. **Inspect schemas**: Read `mockscull/schema/*.schema.json` for method names, param shapes, and response structures. Compare with `lua/numscull/notes.lua`, `flow.lua`, `control.lua`.
+2. **Run Mockscull tests**: From repo root, `cd mockscull && pip install -e ".[dev]" && pytest tests/ -v`. Requires `numscull_native` binary or use `tests/mock_server.py` as the server.
+3. **Cross-check Lua vs Python**: Compare `mockscull/src/numscull/client.py` method signatures and params with the Lua client’s `request()` calls in `lua/numscull/notes.lua`, `flow.lua`, `control.lua`.
+4. **Wire protocol**: `mockscull/src/numscull/transport.py` and `crypto.py` document the wire format. `lua/numscull/transport.lua` and `crypto.lua` must match (10-byte header, 528-byte blocks, counter nonces).
+
+See `mockscull/README.md` for full protocol documentation and module/method tables.
+
 ## License
 
 MIT
