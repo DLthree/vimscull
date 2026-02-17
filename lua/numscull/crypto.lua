@@ -43,7 +43,9 @@ if not sodium then
   return M
 end
 
-if sodium.sodium_init() ~= 0 then
+-- 0 = first init, 1 = already initialized (idempotent), -1 = failure
+local init_ret = sodium.sodium_init()
+if init_ret == -1 then
   M._load_error = "sodium_init failed"
   return M
 end
