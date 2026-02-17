@@ -2,7 +2,7 @@
 -- Uses vim.uv for TCP. Coroutine-based sync wrappers for connect/read/write.
 
 local M = {}
-local uv = vim.uv
+local uv = vim.uv or vim.loop
 local crypto = require("numscull.crypto")
 
 local HEADER_SIZE = 10
