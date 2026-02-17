@@ -106,7 +106,10 @@ function M.request(method, params)
     return nil, "not connected"
   end
 
-  params = params or {}
+  -- Use vim.empty_dict() for empty params so vim.json.encode produces {} not []
+  if not params or next(params) == nil then
+    params = vim.empty_dict()
+  end
   local req = {
     id = next_id(),
     method = method,

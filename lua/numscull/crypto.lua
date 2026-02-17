@@ -157,7 +157,8 @@ function M.EncryptedChannel(sock, ours_recv_sk, ours_send_sk, theirs_recv_pk, th
   local function recv_raw()
     local ct = sock:read(M.ENCRYPTED_BLOCK_SIZE)
     if not ct or #ct ~= M.ENCRYPTED_BLOCK_SIZE then
-      error("socket closed or short read")
+      local got = ct and #ct or 0
+      error(string.format("socket closed or short read: got %d bytes, expected %d", got, M.ENCRYPTED_BLOCK_SIZE))
     end
 
     local nonce = M.counter_nonce(recv_nonce)

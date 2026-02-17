@@ -6,6 +6,13 @@ local uv = vim.uv or vim.loop
 local crypto = require("numscull.crypto")
 
 local HEADER_SIZE = 10
+local DEBUG = os.getenv("NUMSCULL_DEBUG") == "1"
+
+local function dbg(msg)
+  if DEBUG then
+    print("[numscull transport] " .. msg)
+  end
+end
 
 -- Pack plaintext: 10-byte zero-padded decimal length + payload
 local function pack_plaintext(msg)
@@ -23,6 +30,7 @@ function M.connect(host, port)
   local tcp = uv.new_tcp()
   local buffer = ""
   local read_want = nil
+  local read_want_snapshot = nil -- preserved for error messages when read_want is cleared
   local read_co = nil
   local read_result = nil
   local read_err_val = nil
@@ -41,15 +49,23 @@ function M.connect(host, port)
     if #buffer >= n then
       local data = buffer:sub(1, n)
       buffer = buffer:sub(n + 1)
+      dbg(string.format("_read(%d): satisfied from buffer, remaining=%d", n, #buffer))
       return data
     end
     read_want = n
     read_result = nil
     read_err_val = nil
     read_co = coroutine.running()
+    dbg(string.format("_read(%d): waiting, buffer=%d bytes", n, #buffer))
     coroutine.yield()
     if read_err_val then
-      error("read failed: " .. tostring(read_err_val))
+      local want_str = (read_want_snapshot or read_want) and tostring(read_want_snapshot or read_want) or "?"
+      local buf_str = #buffer > 0 and tostring(#buffer) or "0"
+      local hint = ""
+      if read_err_val == "EOF" and #buffer == 0 then
+        hint = " Server closed connection; if no active project, use :NumscullProject <name>."
+      end
+      error(string.format("read failed: %s (wanted %s bytes, buffer had %s).%s", tostring(read_err_val), want_str, buf_str, hint))
     end
     return read_result
   end
@@ -183,6 +199,8 @@ function M.connect(host, port)
 
     tcp:read_start(function(read_err, chunk)
       if read_err then
+        read_want_snapshot = read_want
+        dbg(string.format("read_err=%s, read_want=%s, buffer=%d", tostring(read_err), tostring(read_want), #buffer))
         if read_co then
           local co = read_co
           read_co = nil
@@ -195,6 +213,7 @@ function M.connect(host, port)
       end
       if chunk and #chunk > 0 then
         buffer = buffer .. chunk
+        dbg(string.format("chunk=%d bytes, buffer=%d, read_want=%s", #chunk, #buffer, tostring(read_want)))
       end
       if read_want and #buffer >= read_want then
         read_result = buffer:sub(1, read_want)
@@ -207,6 +226,8 @@ function M.connect(host, port)
         end
       end
       if not chunk then
+        read_want_snapshot = read_want
+        dbg(string.format("EOF: read_want=%s, buffer=%d bytes", tostring(read_want), #buffer))
         if read_co then
           local co = read_co
           read_co = nil

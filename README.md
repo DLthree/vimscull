@@ -228,6 +228,28 @@ Local flows are stored in `.audit/flows.json` — a plain JSON file designed for
 }
 ```
 
+## Troubleshooting
+
+### "read failed: EOF" when adding a note
+
+If `:NoteAdd` fails with `read failed: EOF (wanted 528 bytes, buffer had 0)`, the server closed the connection before sending a response. This commonly happens when **no active project** is set.
+
+**Fix**: Create or switch to a project before adding notes:
+
+1. `:NumscullListProjects` — list available projects
+2. `:NumscullProject <name>` — switch to a project
+3. If no projects exist, create one via the server or Mockscull client first
+
+You can also set `project` in `setup()` to auto-switch after connect:
+
+```lua
+require("numscull").setup({ config_dir = "/path/to/config", project = "my-project" })
+```
+
+### Debug logging
+
+Set `NUMSCULL_DEBUG=1` before starting Neovim to log transport read/write activity (useful when debugging connection issues).
+
 ## Mockscull (reference implementation & schema)
 
 The `mockscull/` directory contains the **reference Python client** and **canonical schemas** for the Numscull protocol. vimscull’s Lua client is a port of this protocol.
@@ -252,6 +274,16 @@ The `mockscull/` directory contains the **reference Python client** and **canoni
 | `mockscull/tests/test_notes.py` | Notes integration tests |
 | `mockscull/tests/test_flow.py` | Flow integration tests |
 | `mockscull/tests/test_schema.py` | JSON Schema validation tests |
+
+### Test against numscull_native
+
+With the server running (`../mockscull/numscull_native -r mockscull/sample-config -p 5111`):
+
+```bash
+nvim --headless -u NONE --cmd 'set rtp+=.' -l tests/test_real_server.lua
+```
+
+This runs: Connect → ListProjects → CreateProject (if needed) → ChangeProject → AddNote.
 
 ### Verifying schema and client implementation
 
