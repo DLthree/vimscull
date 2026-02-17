@@ -1,6 +1,9 @@
 -- tests/run_tests.lua — automated test suite for vimscull (numscull protocol)
 -- Run: nvim --headless -u NONE --cmd 'set rtp+=.' -l tests/run_tests.lua
 -- Requires: libsodium, python3, pynacl
+--
+-- Optional: NUMSCULL_SERVER=/path/to/numscull_native to test against real server
+-- instead of mock server (tests/mock_server.py).
 
 local api = vim.api
 local fn = vim.fn
@@ -95,26 +98,63 @@ local function wait_for_port(port, max_wait_sec)
   return false
 end
 
-local function start_mock_server()
+local function create_real_server_keypair(binary_path)
+  local cmd = string.format("%s -r %s --no-pidfile create_keypair %s",
+    vim.fn.shellescape(binary_path),
+    vim.fn.shellescape(config_dir),
+    vim.fn.shellescape(TEST_IDENTITY))
+  local exit = os.execute(cmd)
+  return exit == true or exit == 0
+end
+
+local function start_server()
   local root = fn.getcwd()
-  local script = root .. "/tests/mock_server.py"
-  local python = root .. "/.venv/bin/python3"
-  if vim.fn.filereadable(python) == 0 then
-    python = "python3"
+  local server_path = os.getenv("NUMSCULL_SERVER")
+
+  if server_path and server_path ~= "" then
+    -- Real server (numscull_native)
+    if vim.fn.filereadable(server_path) == 0 then
+      return false, "NUMSCULL_SERVER path not readable: " .. server_path
+    end
+    local server_json = config_dir .. "/server.json"
+    local f = io.open(server_json, "w")
+    if f then
+      f:write(string.format('{"port": %d, "max_users_per_project": 10}', TEST_PORT))
+      f:close()
+    end
+    -- Remove identity files from crypto tests so numscull_native can create its own
+    os.remove(config_dir .. "/identities/" .. TEST_IDENTITY)
+    os.remove(config_dir .. "/users/" .. TEST_IDENTITY .. ".pub")
+    if not create_real_server_keypair(server_path) then
+      return false, "create_keypair failed for real server"
+    end
+    local cmd = string.format("%s -r %s -p %d",
+      vim.fn.shellescape(server_path),
+      vim.fn.shellescape(config_dir),
+      TEST_PORT)
+    server_job = fn.jobstart(cmd, { cwd = root })
+  else
+    -- Mock server (Python)
+    local script = root .. "/tests/mock_server.py"
+    local python = root .. "/.venv/bin/python3"
+    if vim.fn.filereadable(python) == 0 then
+      python = "python3"
+    end
+    local cmd = string.format("%s %s --port %d --config-dir %s", python, script, TEST_PORT, config_dir)
+    server_job = fn.jobstart(cmd, { cwd = root })
   end
-  local cmd = string.format("%s %s --port %d --config-dir %s", python, script, TEST_PORT, config_dir)
-  server_job = fn.jobstart(cmd, { cwd = root })
+
   if server_job <= 0 then
-    return false, "failed to start mock server"
+    return false, "failed to start server"
   end
   if not wait_for_port(TEST_PORT) then
     fn.jobstop(server_job)
-    return false, "mock server did not start"
+    return false, "server did not start"
   end
   return true
 end
 
-local function stop_mock_server()
+local function stop_server()
   if server_job and server_job > 0 then
     fn.jobstop(server_job)
     server_job = nil
@@ -218,17 +258,21 @@ do
 end
 
 -----------------------------------------------------------------------
--- [Mock Server]
+-- [Server]
 -----------------------------------------------------------------------
-print("\n[Mock Server]")
+print("\n[Server]")
 do
-  local ok, err = start_mock_server()
+  local ok, err = start_server()
   if not ok then
-    report("mock server started", false, err)
-    print("\nSkipping integration tests (mock server failed).")
-    print("Ensure: python3, pip install pynacl, libsodium installed")
+    report("server started", false, err)
+    print("\nSkipping integration tests (server failed).")
+    if os.getenv("NUMSCULL_SERVER") then
+      print("Ensure: NUMSCULL_SERVER points to numscull_native binary")
+    else
+      print("Ensure: python3, pip install pynacl, libsodium installed")
+    end
   else
-    report("mock server started", true)
+    report("server started", true)
   end
 end
 
@@ -1735,7 +1779,7 @@ do
   if numscull_ok and numscull then
     pcall(numscull.disconnect)
   end
-  stop_mock_server()
+  stop_server()
 end
 
 -----------------------------------------------------------------------
