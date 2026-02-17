@@ -10,9 +10,37 @@ numscull.setup()
 
 -- Connection
 vim.api.nvim_create_user_command("NumscullConnect", function(opts)
-  local args = vim.split(opts.args or "", "%s+")
-  local host = args[1] or numscull.config.host
-  local port = tonumber(args[2]) or numscull.config.port
+  local arg_str = opts.args or ""
+  local host = numscull.config.host
+  local port = numscull.config.port
+  
+  if arg_str ~= "" then
+    local args = vim.split(arg_str, "%s+")
+    -- Filter out empty strings from split result
+    local non_empty_args = {}
+    for _, arg in ipairs(args) do
+      if arg ~= "" then
+        table.insert(non_empty_args, arg)
+      end
+    end
+    
+    if #non_empty_args > 0 then
+      -- Check if first arg is :port format
+      if non_empty_args[1]:match("^:%d+$") then
+        port = tonumber(non_empty_args[1]:sub(2))
+      -- Check if first arg is numeric (port only)
+      elseif tonumber(non_empty_args[1]) and #non_empty_args == 1 then
+        port = tonumber(non_empty_args[1])
+      -- Otherwise treat as host
+      else
+        host = non_empty_args[1]
+        if #non_empty_args > 1 then
+          port = tonumber(non_empty_args[2]) or port
+        end
+      end
+    end
+  end
+  
   local ok, err = numscull.connect(host, port)
   if not ok then
     vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
