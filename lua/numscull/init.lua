@@ -48,8 +48,11 @@ function M.connect(host, port)
   if not config_dir then
     return nil, "config_dir required for init (path to identities/)"
   end
-  local ok, err = control.init(host, port, identity, nil, config_dir)
-  if not ok then
+  local pcall_ok, result, err = pcall(control.init, host, port, identity, nil, config_dir)
+  if not pcall_ok then
+    return nil, tostring(result)
+  end
+  if not result then
     return nil, err
   end
   if M.config.project then

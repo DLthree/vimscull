@@ -4,22 +4,26 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 
 ## Demos
 
-### Annotations
+### Notes (server-connected annotations)
 
-![Annotation Tutorial — add, edit, delete](demo/annotation-tutorial.svg)
+![Notes Tutorial — connect, add, edit, search, delete](demo/notes-tutorial.svg)
 
-### Flows
+### Search & Tags
+
+![Search Tutorial — tagged notes, search, tag counts](demo/search-tutorial.svg)
+
+### Flows (local code flow highlighting)
 
 ![Flow Tutorial — create, navigate, switch](demo/flow-tutorial.svg)
 
 ## Features
 
-- **Annotations**: Inline virtual-line annotations that follow code through edits (extmark-anchored).
-- **Flows**: Named sequences of highlighted code locations with colored text and parent/child navigation.
-- Shared JSON storage designed to be committed to git.
-- Multi-line notes, multiple notes per line, toggle visibility.
-- Per-file markdown export.
-- Pure Lua, no dependencies, Neovim 0.9+.
+- **Server-connected annotations**: Inline virtual-line notes synced via the Numscull protocol (NaCl-encrypted JSON-RPC).
+- **Search & tags**: Full-text search, tag-based search (`#tag`), and tag frequency counts across notes.
+- **Flows (local)**: Named sequences of highlighted code locations with colored text and parent/child navigation.
+- **Flows (server)**: Server-side flow CRUD and node management via Numscull protocol.
+- Multi-line notes, toggle visibility, per-file note listing with jump-to-line.
+- Pure Lua, Neovim 0.9+, libsodium for encryption.
 
 ## Installation
 
@@ -29,13 +33,17 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 {
   "your-user/vimscull",
   config = function()
-    require("audit_notes").setup({
+    require("numscull").setup({
       -- All options are optional:
-      -- storage_path = "/custom/path/notes.json",
-      -- author       = "alice",
-      -- autosave     = true,
+      -- host         = "127.0.0.1",
+      -- port         = 5000,
+      -- identity     = nil,       -- auto: $USER
+      -- config_dir   = nil,       -- path to identities/ and users/
+      -- project      = nil,       -- auto-switch to project on connect
       -- icon         = "📝",
       -- max_line_len = 120,
+      -- auto_connect = false,
+      -- auto_fetch   = true,
     })
     require("flows").setup({
       -- storage_path = "/custom/path/flows.json",
@@ -50,7 +58,7 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 use {
   "your-user/vimscull",
   config = function()
-    require("audit_notes").setup()
+    require("numscull").setup()
     require("flows").setup()
   end,
 }
@@ -61,25 +69,29 @@ use {
 Clone this repo into your Neovim runtime path (e.g. `~/.config/nvim/pack/plugins/start/vimscull`) and add to your `init.lua`:
 
 ```lua
-require("audit_notes").setup()
+require("numscull").setup()
 require("flows").setup()
 ```
 
 ## Configuration
 
-### Annotations
+### Numscull (server-connected annotations & flows)
 
 ```lua
-require("audit_notes").setup({
-  storage_path = nil,        -- auto: <git_root>/.audit/notes.json or ~/.local/state/nvim/audit-notes.json
-  author       = nil,        -- auto: vim.g.audit_author or $USER
-  autosave     = true,       -- save JSON on every BufWritePost
-  icon         = "📝",       -- prefix icon for rendered notes
-  max_line_len = 120,        -- truncate virtual lines beyond this width
+require("numscull").setup({
+  host         = "127.0.0.1", -- Numscull server host
+  port         = 5000,        -- Numscull server port
+  identity     = nil,         -- auto: $USER — must match a keypair in config_dir
+  config_dir   = nil,         -- path containing identities/<name> and users/<name>.pub
+  project      = nil,         -- auto-switch to this project after connect
+  icon         = "📝",        -- prefix icon for rendered notes
+  max_line_len = 120,         -- truncate virtual lines beyond this width
+  auto_connect = false,       -- connect on setup (requires identity + config_dir)
+  auto_fetch   = true,        -- fetch notes for each buffer on BufReadPost
 })
 ```
 
-### Flows
+### Flows (local)
 
 ```lua
 require("flows").setup({
@@ -89,22 +101,32 @@ require("flows").setup({
 
 ## Commands
 
-### Annotation commands
+### Connection commands
 
 | Command | Description |
 |---|---|
-| `:AuditAdd` | Prompt for note text, add below cursor line |
-| `:AuditAddHere {text}` | Add a note with inline text (no prompt) |
-| `:AuditEdit` | Edit the note closest to the cursor |
-| `:AuditDelete` | Delete the note closest to the cursor (with confirmation) |
-| `:AuditList` | Open a scratch buffer listing notes; `<CR>` jumps to line |
-| `:AuditToggle` | Show/hide annotations without losing data |
-| `:AuditShow` | Echo the full text of the closest note |
-| `:AuditExport` | Write a markdown summary to `.audit/<file>.md` |
+| `:NumscullConnect [host] [port]` | Connect to Numscull server and initialize (encrypted handshake) |
+| `:NumscullDisconnect` | Disconnect from server |
+| `:NumscullProject <name>` | Switch active project |
+| `:NumscullListProjects` | List available projects |
+
+### Note commands (server-connected)
+
+| Command | Description |
+|---|---|
+| `:NoteAdd [text]` | Add note at cursor (prompts if no text given) |
+| `:NoteEdit` | Edit the note closest to the cursor |
+| `:NoteDelete` | Delete the note closest to the cursor (with confirmation) |
+| `:NoteShow` | Echo the full text of the closest note |
+| `:NoteList` | Open a scratch buffer listing notes; `<CR>` jumps to line |
+| `:NoteToggle` | Show/hide annotations without losing data |
+| `:NoteSearch <text>` | Search notes by text |
+| `:NoteSearchTags <tag>` | Search notes by tag |
+| `:NoteTagCount` | Show tag frequency counts |
 
 Use `\n` in note text to create multi-line annotations.
 
-### Flow commands
+### Flow commands (local)
 
 | Command | Description |
 |---|---|
@@ -119,18 +141,31 @@ Use `\n` in note text to create multi-line annotations.
 
 Available highlight colors: Red, Blue, Green, Yellow, Cyan, Magenta.
 
+### Flow commands (server-connected)
+
+| Command | Description |
+|---|---|
+| `:FlowCreate [name] [description...]` | Create a flow on the server |
+| `:FlowList` | List all server flows |
+| `:FlowShow <flow_id>` | Show flow details and nodes |
+| `:FlowAddNode [flow_id]` | Add node at cursor to a server flow |
+| `:FlowRemoveNode <node_id>` | Remove a node from a server flow |
+| `:FlowRemove <flow_id>` | Remove a server flow |
+
 ## Example keymaps
 
 ```lua
--- Annotations
-vim.keymap.set("n", "<leader>aa", "<cmd>AuditAdd<cr>",    { desc = "Add audit note" })
-vim.keymap.set("n", "<leader>ae", "<cmd>AuditEdit<cr>",   { desc = "Edit audit note" })
-vim.keymap.set("n", "<leader>ad", "<cmd>AuditDelete<cr>", { desc = "Delete audit note" })
-vim.keymap.set("n", "<leader>al", "<cmd>AuditList<cr>",   { desc = "List audit notes" })
-vim.keymap.set("n", "<leader>at", "<cmd>AuditToggle<cr>", { desc = "Toggle audit notes" })
-vim.keymap.set("n", "<leader>as", "<cmd>AuditShow<cr>",   { desc = "Show full note" })
+-- Notes (server-connected)
+vim.keymap.set("n", "<leader>na", "<cmd>NoteAdd<cr>",        { desc = "Add note" })
+vim.keymap.set("n", "<leader>ne", "<cmd>NoteEdit<cr>",       { desc = "Edit note" })
+vim.keymap.set("n", "<leader>nd", "<cmd>NoteDelete<cr>",     { desc = "Delete note" })
+vim.keymap.set("n", "<leader>nl", "<cmd>NoteList<cr>",       { desc = "List notes" })
+vim.keymap.set("n", "<leader>nt", "<cmd>NoteToggle<cr>",     { desc = "Toggle notes" })
+vim.keymap.set("n", "<leader>ns", "<cmd>NoteShow<cr>",       { desc = "Show full note" })
+vim.keymap.set("n", "<leader>n/", "<cmd>NoteSearch<cr>",     { desc = "Search notes" })
+vim.keymap.set("n", "<leader>n#", "<cmd>NoteSearchTags<cr>", { desc = "Search by tag" })
 
--- Flows
+-- Flows (local)
 vim.keymap.set("n", "<leader>fc", "<cmd>FlowCreate<cr>",     { desc = "Create flow" })
 vim.keymap.set("n", "<leader>fs", "<cmd>FlowSelect<cr>",     { desc = "Select flow" })
 vim.keymap.set("v", "<leader>fa", ":<C-u>FlowAddNode<cr>",   { desc = "Add flow node" })
@@ -154,9 +189,13 @@ A flow is a named, ordered list of code locations (file, line, column range). Ea
 
 Nodes have a parent/child relationship defined by their order in the flow. `:FlowNext` moves to the child node, `:FlowPrev` moves to the parent, wrapping around at the ends. Navigation works across files — jumping to a node in a different file opens that file automatically.
 
-### JSON sync and persistence
+### Numscull protocol and encryption
 
-Notes are stored in `.audit/notes.json`, flows in `.audit/flows.json`. Both are plain JSON files designed for git storage. On `BufWritePost`, the plugin syncs live extmark positions back to JSON.
+Notes and server-side flows are synced over TCP using the Numscull protocol. The connection begins with a plaintext `control/init` handshake, followed by an ephemeral X25519 key exchange. All subsequent JSON-RPC messages are encrypted with NaCl Box (Poly1305 MAC, counter-based nonces, 528-byte blocks). The Lua client uses FFI bindings to libsodium.
+
+### Local flow persistence
+
+Local flows are stored in `.audit/flows.json` — a plain JSON file designed for git storage. On `BufWritePost`, the plugin syncs live extmark positions back to JSON.
 
 **Edge cases:**
 - **Deleted lines**: If text containing an extmark is deleted, Neovim collapses the extmark to the nearest valid position. The note remains; it just moves.
@@ -165,24 +204,7 @@ Notes are stored in `.audit/notes.json`, flows in `.audit/flows.json`. Both are 
 
 ## Storage format
 
-### Annotations
-
-```json
-{
-  "/absolute/path/to/file.lua": [
-    {
-      "id": "a1b2c3d4-...",
-      "text": "This function has a race condition.\nNeeds mutex.",
-      "author": "alice",
-      "timestamp": "2025-03-15T10:30:00Z",
-      "line": 42,
-      "col": 0
-    }
-  ]
-}
-```
-
-### Flows
+### Local flows
 
 ```json
 {
