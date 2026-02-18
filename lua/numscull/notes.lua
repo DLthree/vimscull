@@ -134,7 +134,8 @@ function M.for_file(uri)
   if not client.is_connected() then
     return nil, "not connected"
   end
-  local result = client.request("notes/for/file", { fileId = { uri = uri } })
+  local params = { fileId = { uri = uri }, page = { index = 0, size = 100 } }
+  local result = client.request("notes/for/file", params)
   if not result then return nil, "request failed" end
   local notes = {}
   for _, n in ipairs(result.notes or {}) do
@@ -391,6 +392,11 @@ end
 --- Get cached notes for URI (for tests).
 function M.get_cached(uri)
   return notes_by_uri[uri]
+end
+
+--- Get URI for buffer (same format used by decorate/for_file). For tests.
+function M.get_buf_uri(bufnr)
+  return buf_uri(bufnr)
 end
 
 --- Configure (icon, max_line_len).

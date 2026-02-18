@@ -709,12 +709,15 @@ function M.show(flow_id)
   local ordered = build_node_order(nodes)
   for _, entry in ipairs(ordered) do
     local node = entry.node
-    local loc = node.location or {}
-    local uri = (loc.fileId or {}).uri or "?"
+    if type(node) ~= "table" then goto continue end
+    local loc = type(node.location) == "table" and node.location or {}
+    local file_id = type(loc.fileId) == "table" and loc.fileId or {}
+    local uri = tostring(file_id.uri or "?")
     local rel = fn.fnamemodify(uri_to_path(uri) or "?", ":~:.")
-    local line = loc.line or 0
+    local line = tonumber(loc.line) or 0
     lines[#lines + 1] = string.format("  %s  %s:%d [%s] — %s",
-      tostring(entry.id), rel, line, node.color or "?", (node.note or ""):sub(1, 50))
+      tostring(entry.id), rel, line, tostring(node.color or "?"), tostring(node.note or ""):sub(1, 50))
+    ::continue::
   end
   vim.cmd("botright new")
   local sbuf = api.nvim_get_current_buf()
