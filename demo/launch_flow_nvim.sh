@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wrapper to launch nvim with the flows plugin for demo recording
+# Wrapper to launch nvim with the numscull plugin for flow demo recording
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 exec nvim -u NONE \
   --cmd "set rtp+=$REPO_ROOT" \

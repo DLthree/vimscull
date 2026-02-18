@@ -1162,7 +1162,9 @@ do
     "NumscullConnect", "NumscullDisconnect", "NumscullProject", "NumscullListProjects",
     "NoteAdd", "NoteEdit", "NoteDelete", "NoteList", "NoteShow", "NoteToggle",
     "NoteSearch", "NoteSearchTags", "NoteTagCount",
-    "FlowCreate", "FlowList", "FlowShow", "FlowAddNode", "FlowRemoveNode", "FlowRemove",
+    "FlowCreate", "FlowDelete", "FlowSelect", "FlowList", "FlowShow",
+    "FlowAddNode", "FlowDeleteNode", "FlowNext", "FlowPrev",
+    "FlowRemoveNode", "FlowRemove",
   }
   for _, cmd_name in ipairs(expected_cmds) do
     local cmd_exists = vim.fn.exists(":" .. cmd_name) >= 2
@@ -1358,6 +1360,358 @@ do
   -- Clean up
   if fid1 then numscull.flow_remove(fid1) end
   if fid3 then numscull.flow_remove(fid3) end
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Active Flow Tracking]
+-----------------------------------------------------------------------
+print("\n[Flows — Active Flow Tracking]")
+do
+  local flow_mod = require("numscull.flow")
+  local numscull = require("numscull")
+
+  -- Initially no active flow (or whatever was left from prior tests)
+  assert_true("active: get_active_flow_id works", true)
+
+  -- Create a flow — should become active
+  local cr1 = numscull.flow_create("Active Track A", "tracking test")
+  local fid1 = cr1 and cr1.flow and cr1.flow.info and cr1.flow.info.infoId
+  assert_true("active: flow A created", fid1 ~= nil)
+  assert_eq("active: flow A is active", flow_mod.get_active_flow_id(), fid1)
+
+  -- Create a second flow — should replace active
+  local cr2 = numscull.flow_create("Active Track B", "tracking test 2")
+  local fid2 = cr2 and cr2.flow and cr2.flow.info and cr2.flow.info.infoId
+  assert_true("active: flow B created", fid2 ~= nil)
+  assert_eq("active: flow B is active", flow_mod.get_active_flow_id(), fid2)
+
+  -- Activate flow A explicitly
+  flow_mod.activate(fid1)
+  assert_eq("active: switched to flow A", flow_mod.get_active_flow_id(), fid1)
+
+  -- get_active_flow returns the cached flow object
+  local cached = flow_mod.get_active_flow()
+  assert_true("active: cached flow exists", cached ~= nil)
+  if cached then
+    assert_true("active: cached has info", cached.info ~= nil)
+    assert_eq("active: cached name matches", cached.info.name, "Active Track A")
+  end
+
+  -- get_node_order returns a table
+  local order = flow_mod.get_node_order()
+  assert_true("active: node_order is table", type(order) == "table")
+
+  -- Clean up
+  if fid1 then numscull.flow_remove(fid1) end
+  if fid2 then numscull.flow_remove(fid2) end
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Inline Extmark Decoration]
+-----------------------------------------------------------------------
+print("\n[Flows — Inline Extmark Decoration]")
+do
+  local flow_mod = require("numscull.flow")
+  local numscull = require("numscull")
+  local ns_id = api.nvim_create_namespace("numscull_flows")
+
+  -- Create a flow with nodes that reference a test file
+  local cr = numscull.flow_create("Decorate Flow", "extmark test")
+  local fid = cr and cr.flow and cr.flow.info and cr.flow.info.infoId
+  assert_true("decorate: flow created", fid ~= nil)
+
+  if fid then
+    local bufnr, path, uri = open_test_file("decorate_test.lua", "aaa\nbbb\nccc\nddd\n")
+
+    -- Add two nodes to this file
+    local loc1 = { fileId = { uri = uri }, line = 1, startCol = 0, endCol = 3 }
+    local loc2 = { fileId = { uri = uri }, line = 3, startCol = 0, endCol = 3 }
+    numscull.flow_add_node(loc1, "first node", "#ff5555", { flowId = fid })
+    numscull.flow_add_node(loc2, "third node", "#55ff55", { flowId = fid })
+
+    -- Activate this flow — should refresh cache and decorate
+    flow_mod.activate(fid)
+
+    -- Check extmarks
+    local marks = api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, { details = true })
+    assert_gte("decorate: at least 2 extmarks", #marks, 2)
+
+    -- Verify extmark positions (0-indexed rows: line 1 -> row 0, line 3 -> row 2)
+    if #marks >= 2 then
+      local rows = {}
+      for _, m in ipairs(marks) do rows[#rows + 1] = m[2] end
+      table.sort(rows)
+      assert_eq("decorate: first mark row", rows[1], 0)
+      assert_eq("decorate: second mark row", rows[2], 2)
+    end
+
+    -- Verify extmarks have hl_group
+    if #marks >= 1 then
+      local details = marks[1][4]
+      assert_true("decorate: extmark has hl_group", details and details.hl_group ~= nil)
+    end
+
+    -- Switching to a different flow clears extmarks
+    local cr2 = numscull.flow_create("Empty Flow", "no nodes")
+    local fid2 = cr2 and cr2.flow and cr2.flow.info and cr2.flow.info.infoId
+    if fid2 then
+      flow_mod.activate(fid2)
+      local marks2 = api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, {})
+      assert_eq("decorate: cleared after switch", #marks2, 0)
+      numscull.flow_remove(fid2)
+    end
+
+    close_buf()
+    numscull.flow_remove(fid)
+  end
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Navigation Next/Prev]
+-----------------------------------------------------------------------
+print("\n[Flows — Navigation Next/Prev]")
+do
+  local flow_mod = require("numscull.flow")
+  local numscull = require("numscull")
+
+  local cr = numscull.flow_create("Nav Flow", "navigation test")
+  local fid = cr and cr.flow and cr.flow.info and cr.flow.info.infoId
+  assert_true("nav: flow created", fid ~= nil)
+
+  if fid then
+    local bufnr, path, uri = open_test_file("nav_test.lua", "line1\nline2\nline3\nline4\nline5\n")
+
+    -- Add three nodes on lines 1, 3, 5
+    numscull.flow_add_node(
+      { fileId = { uri = uri }, line = 1, startCol = 0, endCol = 5 },
+      "node A", "#ff5555", { flowId = fid })
+    numscull.flow_add_node(
+      { fileId = { uri = uri }, line = 3, startCol = 0, endCol = 5 },
+      "node B", "#8888ff", { flowId = fid })
+    numscull.flow_add_node(
+      { fileId = { uri = uri }, line = 5, startCol = 0, endCol = 5 },
+      "node C", "#55ff55", { flowId = fid })
+
+    flow_mod.activate(fid)
+    local order = flow_mod.get_node_order()
+    assert_eq("nav: 3 nodes in order", #order, 3)
+
+    -- Place cursor on line 1
+    api.nvim_win_set_cursor(0, { 1, 0 })
+
+    -- FlowNext should move to node 2 (line 3)
+    flow_mod.next()
+    local pos = api.nvim_win_get_cursor(0)
+    assert_eq("nav: next from 1 goes to 3", pos[1], 3)
+
+    -- FlowNext again -> node 3 (line 5)
+    flow_mod.next()
+    pos = api.nvim_win_get_cursor(0)
+    assert_eq("nav: next from 3 goes to 5", pos[1], 5)
+
+    -- FlowNext from last -> wrap to node 1 (line 1)
+    flow_mod.next()
+    pos = api.nvim_win_get_cursor(0)
+    assert_eq("nav: next wraps to 1", pos[1], 1)
+
+    -- FlowPrev from first -> wrap to last (line 5)
+    flow_mod.prev()
+    pos = api.nvim_win_get_cursor(0)
+    assert_eq("nav: prev wraps to 5", pos[1], 5)
+
+    -- FlowPrev again -> node 2 (line 3)
+    flow_mod.prev()
+    pos = api.nvim_win_get_cursor(0)
+    assert_eq("nav: prev from 5 goes to 3", pos[1], 3)
+
+    close_buf()
+    numscull.flow_remove(fid)
+  end
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Delete Node at Cursor]
+-----------------------------------------------------------------------
+print("\n[Flows — Delete Node at Cursor]")
+do
+  local flow_mod = require("numscull.flow")
+  local numscull = require("numscull")
+
+  local cr = numscull.flow_create("Delete Node Flow", "delete node test")
+  local fid = cr and cr.flow and cr.flow.info and cr.flow.info.infoId
+  assert_true("del node: flow created", fid ~= nil)
+
+  if fid then
+    local bufnr, path, uri = open_test_file("delnode_test.lua", "aaa\nbbb\nccc\n")
+
+    numscull.flow_add_node(
+      { fileId = { uri = uri }, line = 1, startCol = 0, endCol = 3 },
+      "remove me", "#ff5555", { flowId = fid })
+    numscull.flow_add_node(
+      { fileId = { uri = uri }, line = 3, startCol = 0, endCol = 3 },
+      "keep me", "#55ff55", { flowId = fid })
+
+    flow_mod.activate(fid)
+    assert_eq("del node: 2 nodes before", #flow_mod.get_node_order(), 2)
+
+    -- Put cursor on line 1 and delete nearest node
+    api.nvim_win_set_cursor(0, { 1, 0 })
+    flow_mod.delete_node()
+
+    assert_eq("del node: 1 node after", #flow_mod.get_node_order(), 1)
+    -- Remaining node should be the one on line 3
+    local remaining = flow_mod.get_node_order()[1]
+    assert_true("del node: remaining is keep me", remaining and remaining.node.note == "keep me")
+
+    close_buf()
+    numscull.flow_remove(fid)
+  end
+end
+
+-----------------------------------------------------------------------
+-- [Flows — location_from_visual]
+-----------------------------------------------------------------------
+print("\n[Flows — location_from_visual]")
+do
+  local flow_mod = require("numscull.flow")
+
+  local bufnr, path, uri = open_test_file("visual_test.lua", "hello world\nfoo bar\nbaz qux\n")
+
+  -- Simulate visual selection by setting marks
+  api.nvim_win_set_cursor(0, { 1, 0 })
+  fn.setpos("'<", { 0, 2, 3, 0 })  -- line 2, col 3
+  fn.setpos("'>", { 0, 2, 6, 0 })  -- line 2, col 6
+
+  local loc = flow_mod.location_from_visual(bufnr)
+  assert_true("visual: location returned", loc ~= nil)
+  if loc then
+    assert_true("visual: has fileId", loc.fileId ~= nil)
+    assert_eq("visual: line is 2", loc.line, 2)
+    assert_eq("visual: startCol is 2 (0-indexed from col 3)", loc.startCol, 2)
+    assert_eq("visual: endCol is 6", loc.endCol, 6)
+  end
+
+  close_buf()
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Palette and Highlight Groups]
+-----------------------------------------------------------------------
+print("\n[Flows — Palette and Highlight Groups]")
+do
+  local flow_mod = require("numscull.flow")
+
+  -- Palette structure
+  assert_eq("palette: 6 colors", #flow_mod.palette, 6)
+  for _, c in ipairs(flow_mod.palette) do
+    assert_true("palette: " .. c.name .. " has hl", c.hl ~= nil and #c.hl > 0)
+    assert_true("palette: " .. c.name .. " has fg", c.fg ~= nil and #c.fg > 0)
+    assert_true("palette: " .. c.name .. " has bg", c.bg ~= nil and #c.bg > 0)
+  end
+
+  -- Highlight groups created by flow.setup()
+  local hl_red = api.nvim_get_hl(0, { name = "FlowRed" })
+  local hl_blue = api.nvim_get_hl(0, { name = "FlowBlue" })
+  local hl_green = api.nvim_get_hl(0, { name = "FlowGreen" })
+  local hl_yellow = api.nvim_get_hl(0, { name = "FlowYellow" })
+  local hl_cyan = api.nvim_get_hl(0, { name = "FlowCyan" })
+  local hl_magenta = api.nvim_get_hl(0, { name = "FlowMagenta" })
+  local hl_select = api.nvim_get_hl(0, { name = "FlowSelect" })
+  local hl_header = api.nvim_get_hl(0, { name = "FlowHeader" })
+
+  assert_true("hl: FlowRed exists", hl_red and next(hl_red) ~= nil)
+  assert_true("hl: FlowBlue exists", hl_blue and next(hl_blue) ~= nil)
+  assert_true("hl: FlowGreen exists", hl_green and next(hl_green) ~= nil)
+  assert_true("hl: FlowYellow exists", hl_yellow and next(hl_yellow) ~= nil)
+  assert_true("hl: FlowCyan exists", hl_cyan and next(hl_cyan) ~= nil)
+  assert_true("hl: FlowMagenta exists", hl_magenta and next(hl_magenta) ~= nil)
+  assert_true("hl: FlowSelect exists", hl_select and next(hl_select) ~= nil)
+  assert_true("hl: FlowHeader exists", hl_header and next(hl_header) ~= nil)
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Show with Active Flow]
+-----------------------------------------------------------------------
+print("\n[Flows — Show with Active Flow]")
+do
+  local flow_mod = require("numscull.flow")
+  local numscull = require("numscull")
+
+  local cr = numscull.flow_create("Show Active", "test show without explicit id")
+  local fid = cr and cr.flow and cr.flow.info and cr.flow.info.infoId
+  assert_true("show active: flow created", fid ~= nil)
+
+  if fid then
+    local bufnr, path, uri = open_test_file("show_active.lua", "x\ny\nz\n")
+
+    numscull.flow_add_node(
+      { fileId = { uri = uri }, line = 2, startCol = 0, endCol = 1 },
+      "show node", "#ff5555", { flowId = fid })
+
+    flow_mod.activate(fid)
+
+    -- FlowShow with no args should use active flow
+    local prev_buf = api.nvim_get_current_buf()
+    flow_mod.show()
+    local show_buf = api.nvim_get_current_buf()
+    assert_true("show active: opened new buffer", show_buf ~= prev_buf)
+    assert_eq("show active: buftype nofile", vim.bo[show_buf].buftype, "nofile")
+    assert_eq("show active: filetype", vim.bo[show_buf].filetype, "numscull_flow")
+
+    local lines = api.nvim_buf_get_lines(show_buf, 0, -1, false)
+    local all_text = table.concat(lines, "\n")
+    assert_match("show active: header has name", all_text, "Show Active")
+    assert_match("show active: shows node", all_text, "show node")
+
+    pcall(vim.cmd, "bwipeout!")
+    close_buf()
+    numscull.flow_remove(fid)
+  end
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Navigation Empty/No Active]
+-----------------------------------------------------------------------
+print("\n[Flows — Navigation Empty/No Active]")
+do
+  local flow_mod = require("numscull.flow")
+
+  -- Deactivate any flow
+  flow_mod.activate(nil)
+
+  -- next/prev with no active flow should not crash
+  local ok1, err1 = pcall(flow_mod.next)
+  assert_true("nav empty: next no active does not crash", ok1, tostring(err1))
+
+  local ok2, err2 = pcall(flow_mod.prev)
+  assert_true("nav empty: prev no active does not crash", ok2, tostring(err2))
+
+  -- delete_node with no active flow should not crash
+  local ok3, err3 = pcall(flow_mod.delete_node)
+  assert_true("nav empty: delete_node no active does not crash", ok3, tostring(err3))
+end
+
+-----------------------------------------------------------------------
+-- [Flows — Remove Active Flow Clears State]
+-----------------------------------------------------------------------
+print("\n[Flows — Remove Active Flow Clears State]")
+do
+  local flow_mod = require("numscull.flow")
+  local numscull = require("numscull")
+
+  local cr = numscull.flow_create("Remove Active", "remove clears state")
+  local fid = cr and cr.flow and cr.flow.info and cr.flow.info.infoId
+  assert_true("rm active: flow created", fid ~= nil)
+
+  if fid then
+    flow_mod.activate(fid)
+    assert_eq("rm active: is active", flow_mod.get_active_flow_id(), fid)
+
+    numscull.flow_remove(fid)
+    assert_eq("rm active: cleared after remove", flow_mod.get_active_flow_id(), nil)
+    assert_eq("rm active: cached flow nil", flow_mod.get_active_flow(), nil)
+    assert_eq("rm active: node order empty", #flow_mod.get_node_order(), 0)
+  end
 end
 
 -----------------------------------------------------------------------

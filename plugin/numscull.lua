@@ -161,24 +161,41 @@ vim.api.nvim_create_user_command("FlowCreate", function(opts)
     return
   end
   vim.notify("[numscull] flow created", vim.log.levels.INFO)
-end, { nargs = "*", desc = "Create a flow" })
+end, { nargs = "*", desc = "Create a flow (becomes the active flow)" })
+
+vim.api.nvim_create_user_command("FlowDelete", function()
+  numscull.flow_delete()
+end, { desc = "Delete the active flow (with confirmation)" })
+
+vim.api.nvim_create_user_command("FlowSelect", function()
+  numscull.flow_select()
+end, { desc = "Open floating window to pick, create, or delete flows" })
+
+vim.api.nvim_create_user_command("FlowAddNode", function(opts)
+  local flow_id = opts.args ~= "" and tonumber(opts.args) or nil
+  numscull.flow_add_node_visual(flow_id)
+end, { range = true, nargs = "?", desc = "Add visual selection as a node to the active flow" })
+
+vim.api.nvim_create_user_command("FlowDeleteNode", function()
+  numscull.flow_delete_node()
+end, { desc = "Remove the closest node near cursor from the active flow" })
+
+vim.api.nvim_create_user_command("FlowNext", function()
+  numscull.flow_next()
+end, { desc = "Jump to the next node in the active flow" })
+
+vim.api.nvim_create_user_command("FlowPrev", function()
+  numscull.flow_prev()
+end, { desc = "Jump to the previous node in the active flow" })
 
 vim.api.nvim_create_user_command("FlowList", function()
   numscull.flow_list()
 end, { desc = "List all flows" })
 
 vim.api.nvim_create_user_command("FlowShow", function(opts)
-  if opts.args == "" then
-    vim.notify("[numscull] usage: FlowShow <flow_id>", vim.log.levels.WARN)
-    return
-  end
-  numscull.flow_show(tonumber(opts.args))
-end, { nargs = 1, desc = "Show flow details" })
-
-vim.api.nvim_create_user_command("FlowAddNode", function(opts)
   local flow_id = opts.args ~= "" and tonumber(opts.args) or nil
-  numscull.flow_add_node_at_cursor(flow_id)
-end, { nargs = "?", desc = "Add node at cursor" })
+  numscull.flow_show(flow_id)
+end, { nargs = "?", desc = "Show flow details and nodes" })
 
 vim.api.nvim_create_user_command("FlowRemoveNode", function(opts)
   if opts.args == "" then
@@ -191,7 +208,7 @@ vim.api.nvim_create_user_command("FlowRemoveNode", function(opts)
   else
     vim.notify("[numscull] node removed", vim.log.levels.INFO)
   end
-end, { nargs = 1, desc = "Remove a flow node" })
+end, { nargs = 1, desc = "Remove a flow node by ID" })
 
 vim.api.nvim_create_user_command("FlowRemove", function(opts)
   if opts.args == "" then
@@ -204,4 +221,4 @@ vim.api.nvim_create_user_command("FlowRemove", function(opts)
   else
     vim.notify("[numscull] flow removed", vim.log.levels.INFO)
   end
-end, { nargs = 1, desc = "Remove a flow" })
+end, { nargs = 1, desc = "Remove a flow by ID" })

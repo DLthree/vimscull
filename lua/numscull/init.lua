@@ -23,6 +23,7 @@ local augroup = nil
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   notes.setup({ icon = M.config.icon, max_line_len = M.config.max_line_len })
+  flow.setup()
 
   augroup = api.nvim_create_augroup("Numscull", { clear = true })
   if M.config.auto_fetch then
@@ -117,5 +118,12 @@ M.flow_unlock = flow.unlock
 M.flow_list = flow.list
 M.flow_show = flow.show
 M.flow_add_node_at_cursor = flow.add_node_at_cursor
+M.flow_add_node_visual = flow.add_node_visual
+M.flow_delete = flow.delete
+M.flow_delete_node = flow.delete_node
+M.flow_select = flow.select
+M.flow_activate = flow.activate
+M.flow_next = flow.next
+M.flow_prev = flow.prev
 
 return M
