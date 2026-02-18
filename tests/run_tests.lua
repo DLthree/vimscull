@@ -1515,13 +1515,16 @@ do
   assert_true("decorate: flow created", fid ~= nil)
 
   if fid then
+    local notes_mod = require("numscull.notes")
     local bufnr, path, uri = open_test_file("decorate_test.lua", "aaa\nbbb\nccc\nddd\n")
+    local uri_key = notes_mod.get_buf_uri(bufnr) or uri
 
-    -- Add two nodes to this file
-    local loc1 = { fileId = { uri = uri }, line = 1, startCol = 0, endCol = 3 }
-    local loc2 = { fileId = { uri = uri }, line = 3, startCol = 0, endCol = 3 }
-    numscull.flow_add_node(loc1, "first node", "#ff5555", { flowId = fid })
-    numscull.flow_add_node(loc2, "third node", "#55ff55", { flowId = fid })
+    -- Add two nodes (use fork for 2nd; real server may require fork for additional nodes)
+    local loc1 = { fileId = { uri = uri_key }, line = 1, startCol = 0, endCol = 3 }
+    local loc2 = { fileId = { uri = uri_key }, line = 3, startCol = 0, endCol = 3 }
+    local n1 = numscull.flow_add_node(loc1, "first node", "#ff5555", { flowId = fid })
+    local n1_id = n1 and n1.nodeId
+    local n2 = n1_id and numscull.flow_fork_node(loc2, "third node", "#55ff55", n1_id) or numscull.flow_add_node(loc2, "third node", "#55ff55", { flowId = fid })
 
     -- Activate this flow — should refresh cache and decorate
     flow_mod.activate(fid)
@@ -1573,18 +1576,19 @@ do
   assert_true("nav: flow created", fid ~= nil)
 
   if fid then
+    local notes_mod = require("numscull.notes")
     local bufnr, path, uri = open_test_file("nav_test.lua", "line1\nline2\nline3\nline4\nline5\n")
+    local uri_key = notes_mod.get_buf_uri(bufnr) or uri
 
-    -- Add three nodes on lines 1, 3, 5
-    numscull.flow_add_node(
-      { fileId = { uri = uri }, line = 1, startCol = 0, endCol = 5 },
-      "node A", "#ff5555", { flowId = fid })
-    numscull.flow_add_node(
-      { fileId = { uri = uri }, line = 3, startCol = 0, endCol = 5 },
-      "node B", "#8888ff", { flowId = fid })
-    numscull.flow_add_node(
-      { fileId = { uri = uri }, line = 5, startCol = 0, endCol = 5 },
-      "node C", "#55ff55", { flowId = fid })
+    -- Add three nodes on lines 1, 3, 5 (use fork for 2nd/3rd; real server compat)
+    local loc1 = { fileId = { uri = uri_key }, line = 1, startCol = 0, endCol = 5 }
+    local loc2 = { fileId = { uri = uri_key }, line = 3, startCol = 0, endCol = 5 }
+    local loc3 = { fileId = { uri = uri_key }, line = 5, startCol = 0, endCol = 5 }
+    local na = numscull.flow_add_node(loc1, "node A", "#ff5555", { flowId = fid })
+    local na_id = na and na.nodeId
+    local nb = na_id and numscull.flow_fork_node(loc2, "node B", "#8888ff", na_id) or numscull.flow_add_node(loc2, "node B", "#8888ff", { flowId = fid })
+    local nb_id = nb and nb.nodeId
+    local nc = (na_id or nb_id) and numscull.flow_fork_node(loc3, "node C", "#55ff55", na_id or nb_id) or numscull.flow_add_node(loc3, "node C", "#55ff55", { flowId = fid })
 
     flow_mod.activate(fid)
     local order = flow_mod.get_node_order()
@@ -1636,13 +1640,18 @@ do
   assert_true("del node: flow created", fid ~= nil)
 
   if fid then
+    local notes_mod = require("numscull.notes")
     local bufnr, path, uri = open_test_file("delnode_test.lua", "aaa\nbbb\nccc\n")
+    local uri_key = notes_mod.get_buf_uri(bufnr) or uri
 
-    numscull.flow_add_node(
-      { fileId = { uri = uri }, line = 1, startCol = 0, endCol = 3 },
+    local n1 = numscull.flow_add_node(
+      { fileId = { uri = uri_key }, line = 1, startCol = 0, endCol = 3 },
       "remove me", "#ff5555", { flowId = fid })
-    numscull.flow_add_node(
-      { fileId = { uri = uri }, line = 3, startCol = 0, endCol = 3 },
+    local n1_id = n1 and n1.nodeId
+    local n2 = n1_id and numscull.flow_fork_node(
+      { fileId = { uri = uri_key }, line = 3, startCol = 0, endCol = 3 },
+      "keep me", "#55ff55", n1_id) or numscull.flow_add_node(
+      { fileId = { uri = uri_key }, line = 3, startCol = 0, endCol = 3 },
       "keep me", "#55ff55", { flowId = fid })
 
     flow_mod.activate(fid)
@@ -1736,10 +1745,12 @@ do
   assert_true("show active: flow created", fid ~= nil)
 
   if fid then
+    local notes_mod = require("numscull.notes")
     local bufnr, path, uri = open_test_file("show_active.lua", "x\ny\nz\n")
+    local uri_key = notes_mod.get_buf_uri(bufnr) or uri
 
     numscull.flow_add_node(
-      { fileId = { uri = uri }, line = 2, startCol = 0, endCol = 1 },
+      { fileId = { uri = uri_key }, line = 2, startCol = 0, endCol = 1 },
       "show node", "#ff5555", { flowId = fid })
 
     flow_mod.activate(fid)
