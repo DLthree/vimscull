@@ -12,6 +12,14 @@ local function next_id()
   return _msg_id
 end
 
+--- If resp is a control/error response, return reason string; otherwise return nil.
+local function control_error_reason(resp)
+  if resp and resp.method == "control/error" then
+    return (resp.params or resp.result or {}).reason or "unknown error"
+  end
+  return nil
+end
+
 --- Connect to host:port. Returns true or nil, err.
 function M.connect(host, port)
   if _transport then
@@ -57,10 +65,8 @@ function M.init(identity, secret_key, config_dir, version)
     return _transport.recv_plaintext()
   end)
 
-  if resp.method == "control/error" then
-    local reason = (resp.params or resp.result or {}).reason or "init failed"
-    return nil, reason
-  end
+  local err = control_error_reason(resp)
+  if err then return nil, err end
 
   local params = resp.params or resp.result or {}
   local pk_b64 = (params.publicKey or {}).bytes
@@ -126,10 +132,8 @@ function M.request(method, params)
     return _transport.recv()
   end)
 
-  if resp.method == "control/error" then
-    local reason = (resp.result or {}).reason or "unknown error"
-    return nil, reason
-  end
+  local err = control_error_reason(resp)
+  if err then return nil, err end
 
   return resp.result or resp.params or resp
 end
