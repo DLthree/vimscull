@@ -57,6 +57,11 @@ function M.init(identity, secret_key, config_dir, version)
     return _transport.recv_plaintext()
   end)
 
+  if resp.method == "control/error" then
+    local reason = (resp.params or resp.result or {}).reason or "init failed"
+    return nil, reason
+  end
+
   local params = resp.params or resp.result or {}
   local pk_b64 = (params.publicKey or {}).bytes
   if not pk_b64 then

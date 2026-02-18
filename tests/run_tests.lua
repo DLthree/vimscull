@@ -88,11 +88,17 @@ local function port_open(port)
   return result and result[1] == "ok"
 end
 
-local function wait_for_port(port, max_wait_sec)
+--- Wait for port to open or for job to exit. Returns true if port is open, nil, err if job died first.
+local function wait_for_port(port, job_id, max_wait_sec)
   max_wait_sec = max_wait_sec or 5
   local start = os.time()
   while (os.time() - start) < max_wait_sec do
     if port_open(port) then return true end
+    -- jobwait({id}, 0): returns immediately; {-1} = still running, {exit_code} = job exited
+    local status = fn.jobwait({ job_id }, 0)
+    if status[1] and status[1] ~= -1 then
+      return nil, "server process exited before port became available (exit code " .. tostring(status[1]) .. ")"
+    end
     os.execute("sleep 0.2 2>/dev/null || ping -c 1 127.0.0.1 >/dev/null 2>&1")
   end
   return false
@@ -111,8 +117,33 @@ local function start_server()
   local root = fn.getcwd()
   local server_path = os.getenv("NUMSCULL_SERVER")
 
+  local function on_stdout(_, data, _)
+    for _, line in ipairs(data or {}) do
+      if line and line ~= "" then
+        io.stdout:write(line .. "\n")
+        io.stdout:flush()
+      end
+    end
+  end
+  local function on_stderr(_, data, _)
+    for _, line in ipairs(data or {}) do
+      if line and line ~= "" then
+        io.stderr:write(line .. "\n")
+        io.stderr:flush()
+      end
+    end
+  end
+
+  -- Port must be free before we spawn (quick check; fatal if already in use)
+  if port_open(TEST_PORT) then
+    return false, "port " .. TEST_PORT .. " is already in use; cannot start server"
+  end
+
+  local job_opts = { cwd = root, on_stdout = on_stdout, on_stderr = on_stderr }
+
   if server_path and server_path ~= "" then
     -- Real server (numscull_native)
+    print("  [start_server] mode=real server_path=" .. tostring(server_path) .. " port=" .. TEST_PORT)
     if vim.fn.filereadable(server_path) == 0 then
       return false, "NUMSCULL_SERVER path not readable: " .. server_path
     end
@@ -125,6 +156,7 @@ local function start_server()
     -- Remove identity files from crypto tests so numscull_native can create its own
     os.remove(config_dir .. "/identities/" .. TEST_IDENTITY)
     os.remove(config_dir .. "/users/" .. TEST_IDENTITY .. ".pub")
+    print("  [start_server] running create_keypair...")
     if not create_real_server_keypair(server_path) then
       return false, "create_keypair failed for real server"
     end
@@ -132,7 +164,8 @@ local function start_server()
       vim.fn.shellescape(server_path),
       vim.fn.shellescape(config_dir),
       TEST_PORT)
-    server_job = fn.jobstart(cmd, { cwd = root })
+    print("  [start_server] cmd: " .. cmd)
+    server_job = fn.jobstart(cmd, job_opts)
   else
     -- Mock server (Python)
     local script = root .. "/tests/mock_server.py"
@@ -140,17 +173,27 @@ local function start_server()
     if vim.fn.filereadable(python) == 0 then
       python = "python3"
     end
+    print("  [start_server] mode=mock python=" .. tostring(python) .. " script=" .. script .. " port=" .. TEST_PORT .. " config_dir=" .. tostring(config_dir))
     local cmd = string.format("%s %s --port %d --config-dir %s", python, script, TEST_PORT, config_dir)
-    server_job = fn.jobstart(cmd, { cwd = root })
+    print("  [start_server] cmd: " .. cmd)
+    server_job = fn.jobstart(cmd, job_opts)
   end
 
+  print("  [start_server] jobstart returned: " .. tostring(server_job))
   if server_job <= 0 then
-    return false, "failed to start server"
+    return false, "jobstart failed (returned " .. tostring(server_job) .. ")"
   end
-  if not wait_for_port(TEST_PORT) then
+  print("  [start_server] waiting for port " .. TEST_PORT .. " (max 5s)...")
+  local ok, err = wait_for_port(TEST_PORT, server_job)
+  if err then
     fn.jobstop(server_job)
-    return false, "server did not start"
+    return false, err
   end
+  if not ok then
+    fn.jobstop(server_job)
+    return false, "port " .. TEST_PORT .. " never became reachable after 5s (process may have exited; check python/lib paths)"
+  end
+  print("  [start_server] port " .. TEST_PORT .. " is open")
   return true
 end
 
@@ -266,16 +309,15 @@ print("\n[Server]")
 do
   local ok, err = start_server()
   if not ok then
-    report("server started", false, err)
-    print("\nSkipping integration tests (server failed).")
+    print("  FATAL: server failed to start: " .. tostring(err))
     if os.getenv("NUMSCULL_SERVER") then
-      print("Ensure: NUMSCULL_SERVER points to numscull_native binary")
+      print("  Ensure: NUMSCULL_SERVER points to numscull_native binary")
     else
-      print("Ensure: python3, pip install pynacl, libsodium installed")
+      print("  Ensure: python3, pip install pynacl, libsodium installed")
     end
-  else
-    report("server started", true)
+    os.exit(1)
   end
+  report("server started", true)
 end
 
 local integration_ok = false
