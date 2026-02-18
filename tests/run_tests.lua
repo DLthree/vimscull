@@ -1162,7 +1162,9 @@ do
     "NumscullConnect", "NumscullDisconnect", "NumscullProject", "NumscullListProjects",
     "NoteAdd", "NoteEdit", "NoteDelete", "NoteList", "NoteShow", "NoteToggle",
     "NoteSearch", "NoteSearchTags", "NoteTagCount",
-    "FlowCreate", "FlowList", "FlowShow", "FlowAddNode", "FlowRemoveNode", "FlowRemove",
+    "FlowCreate", "FlowDelete", "FlowSelect", "FlowList", "FlowShow",
+    "FlowAddNode", "FlowDeleteNode", "FlowNext", "FlowPrev",
+    "FlowRemoveNode", "FlowRemove",
   }
   for _, cmd_name in ipairs(expected_cmds) do
     local cmd_exists = vim.fn.exists(":" .. cmd_name) >= 2

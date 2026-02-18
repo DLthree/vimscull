@@ -65,16 +65,20 @@ svg-term \
 
 ---
 
-## Flow tutorial (local code flows)
+## Flow tutorial (server-connected code flows)
 
-Demonstrates: `:FlowCreate`, `:FlowAddNode`, `:FlowNext`, `:FlowPrev`,
-`:FlowSelect`, `:FlowList`.
+Demonstrates: `:NumscullConnect`, `:NumscullProject`, `:FlowCreate`,
+`:FlowAddNode`, `:FlowNext`, `:FlowPrev`, `:FlowSelect`, `:FlowList`,
+`:FlowShow`, `:FlowDelete`.
 
 ### Recording
 
 ```bash
 python3 demo/record_flow_tutorial.py
 ```
+
+The script starts a mock Numscull server, records a full flows workflow in
+Neovim, then shuts the server down.
 
 ### Converting to animated SVG
 

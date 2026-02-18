@@ -1,6 +1,6 @@
 # vimscull
 
-Persistent, collaborative audit annotations and code flow highlighting for Neovim — rendered inline using extmarks.
+Persistent, collaborative audit annotations and code flow highlighting for Neovim — rendered inline using extmarks. All data synced via the Numscull protocol.
 
 ## Demos
 
@@ -12,7 +12,7 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 
 ![Search Tutorial — tagged notes, search, tag counts](demo/search-tutorial.svg)
 
-### Flows (local code flow highlighting)
+### Flows (server-connected code flow highlighting)
 
 ![Flow Tutorial — create, navigate, switch](demo/flow-tutorial.svg)
 
@@ -20,8 +20,7 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 
 - **Server-connected annotations**: Inline virtual-line notes synced via the Numscull protocol (NaCl-encrypted JSON-RPC).
 - **Search & tags**: Full-text search, tag-based search (`#tag`), and tag frequency counts across notes.
-- **Flows (local)**: Named sequences of highlighted code locations with colored text and parent/child navigation.
-- **Flows (server)**: Server-side flow CRUD and node management via Numscull protocol.
+- **Flows**: Named, graph-based sequences of highlighted code locations with colored text, parent/child navigation, and a floating selection UI — all synced via Numscull.
 - Multi-line notes, toggle visibility, per-file note listing with jump-to-line.
 - Pure Lua, Neovim 0.9+, libsodium for encryption.
 
@@ -45,9 +44,6 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
       -- auto_connect = false,
       -- auto_fetch   = true,
     })
-    require("flows").setup({
-      -- storage_path = "/custom/path/flows.json",
-    })
   end,
 }
 ```
@@ -59,7 +55,6 @@ use {
   "your-user/vimscull",
   config = function()
     require("numscull").setup()
-    require("flows").setup()
   end,
 }
 ```
@@ -70,12 +65,9 @@ Clone this repo into your Neovim runtime path (e.g. `~/.config/nvim/pack/plugins
 
 ```lua
 require("numscull").setup()
-require("flows").setup()
 ```
 
 ## Configuration
-
-### Numscull (server-connected annotations & flows)
 
 ```lua
 require("numscull").setup({
@@ -91,14 +83,6 @@ require("numscull").setup({
 })
 ```
 
-### Flows (local)
-
-```lua
-require("flows").setup({
-  storage_path = nil,        -- auto: <git_root>/.audit/flows.json or ~/.local/state/nvim/flows.json
-})
-```
-
 ## Commands
 
 ### Connection commands
@@ -110,7 +94,7 @@ require("flows").setup({
 | `:NumscullProject <name>` | Switch active project |
 | `:NumscullListProjects` | List available projects |
 
-### Note commands (server-connected)
+### Note commands
 
 | Command | Description |
 |---|---|
@@ -126,36 +110,28 @@ require("flows").setup({
 
 Use `\n` in note text to create multi-line annotations.
 
-### Flow commands (local)
+### Flow commands
 
 | Command | Description |
 |---|---|
-| `:FlowCreate [name]` | Create a new flow (becomes the active flow) |
+| `:FlowCreate [name] [description...]` | Create a new flow (becomes the active flow) |
 | `:FlowDelete` | Delete the active flow (with confirmation) |
 | `:FlowSelect` | Open floating window to pick, create, or delete flows |
-| `:FlowAddNode` | Add visual selection as a node to the active flow (prompts for color) |
+| `:FlowAddNode [flow_id]` | Add visual selection as a node to the active flow (prompts for color) |
 | `:FlowDeleteNode` | Remove the closest node near cursor from the active flow |
-| `:FlowNext` | Jump to the next (child) node in the active flow |
-| `:FlowPrev` | Jump to the previous (parent) node in the active flow |
-| `:FlowList` | Open a scratch buffer listing nodes; `<CR>` jumps to location |
+| `:FlowNext` | Jump to the next node in the active flow |
+| `:FlowPrev` | Jump to the previous node in the active flow |
+| `:FlowList` | List all flows in a scratch buffer |
+| `:FlowShow [flow_id]` | Show flow details and nodes; `<CR>` jumps to location |
+| `:FlowRemoveNode <node_id>` | Remove a flow node by server ID |
+| `:FlowRemove <flow_id>` | Remove a flow by server ID |
 
 Available highlight colors: Red, Blue, Green, Yellow, Cyan, Magenta.
-
-### Flow commands (server-connected)
-
-| Command | Description |
-|---|---|
-| `:FlowCreate [name] [description...]` | Create a flow on the server |
-| `:FlowList` | List all server flows |
-| `:FlowShow <flow_id>` | Show flow details and nodes |
-| `:FlowAddNode [flow_id]` | Add node at cursor to a server flow |
-| `:FlowRemoveNode <node_id>` | Remove a node from a server flow |
-| `:FlowRemove <flow_id>` | Remove a server flow |
 
 ## Example keymaps
 
 ```lua
--- Notes (server-connected)
+-- Notes
 vim.keymap.set("n", "<leader>na", "<cmd>NoteAdd<cr>",        { desc = "Add note" })
 vim.keymap.set("n", "<leader>ne", "<cmd>NoteEdit<cr>",       { desc = "Edit note" })
 vim.keymap.set("n", "<leader>nd", "<cmd>NoteDelete<cr>",     { desc = "Delete note" })
@@ -165,14 +141,15 @@ vim.keymap.set("n", "<leader>ns", "<cmd>NoteShow<cr>",       { desc = "Show full
 vim.keymap.set("n", "<leader>n/", "<cmd>NoteSearch<cr>",     { desc = "Search notes" })
 vim.keymap.set("n", "<leader>n#", "<cmd>NoteSearchTags<cr>", { desc = "Search by tag" })
 
--- Flows (local)
+-- Flows
 vim.keymap.set("n", "<leader>fc", "<cmd>FlowCreate<cr>",     { desc = "Create flow" })
 vim.keymap.set("n", "<leader>fs", "<cmd>FlowSelect<cr>",     { desc = "Select flow" })
 vim.keymap.set("v", "<leader>fa", ":<C-u>FlowAddNode<cr>",   { desc = "Add flow node" })
 vim.keymap.set("n", "<leader>fd", "<cmd>FlowDeleteNode<cr>", { desc = "Delete flow node" })
 vim.keymap.set("n", "<leader>fn", "<cmd>FlowNext<cr>",       { desc = "Next flow node" })
 vim.keymap.set("n", "<leader>fp", "<cmd>FlowPrev<cr>",       { desc = "Prev flow node" })
-vim.keymap.set("n", "<leader>fl", "<cmd>FlowList<cr>",       { desc = "List flow nodes" })
+vim.keymap.set("n", "<leader>fl", "<cmd>FlowList<cr>",       { desc = "List flows" })
+vim.keymap.set("n", "<leader>fw", "<cmd>FlowShow<cr>",       { desc = "Show flow details" })
 ```
 
 ## How it works
@@ -185,52 +162,19 @@ The extmark renders the annotation as one or more **virtual lines** below the an
 
 ### Flows — inline highlights with navigation
 
-A flow is a named, ordered list of code locations (file, line, column range). Each node in a flow highlights the specified text range with a colored background using extmarks with `hl_group`. Only one flow is active at a time — switching flows swaps the highlights across all open buffers.
+A flow is a named, directed graph of code locations (file, line, column range) stored on the Numscull server. Each node in a flow highlights the specified text range with a colored background using extmarks with `hl_group`. Only one flow is active at a time — switching flows swaps the highlights across all open buffers.
 
-Nodes have a parent/child relationship defined by their order in the flow. `:FlowNext` moves to the child node, `:FlowPrev` moves to the parent, wrapping around at the ends. Navigation works across files — jumping to a node in a different file opens that file automatically.
+Nodes are ordered by server ID for linear navigation. `:FlowNext` moves to the next node, `:FlowPrev` moves to the previous, wrapping around at the ends. Navigation works across files — jumping to a node in a different file opens that file automatically.
+
+The server stores the full graph structure with directed edges (parent/child/fork relationships). Use `:FlowShow` to inspect the graph, or `:FlowAddNode` and `:FlowRemoveNode` for fine-grained control.
 
 ### Numscull protocol and encryption
 
-Notes and server-side flows are synced over TCP using the Numscull protocol. The connection begins with a plaintext `control/init` handshake, followed by an ephemeral X25519 key exchange. All subsequent JSON-RPC messages are encrypted with NaCl Box (Poly1305 MAC, counter-based nonces, 528-byte blocks). The Lua client uses FFI bindings to libsodium.
-
-### Local flow persistence
-
-Local flows are stored in `.audit/flows.json` — a plain JSON file designed for git storage. On `BufWritePost`, the plugin syncs live extmark positions back to JSON.
-
-**Edge cases:**
-- **Deleted lines**: If text containing an extmark is deleted, Neovim collapses the extmark to the nearest valid position. The note remains; it just moves.
-- **Missing/renamed files**: Entries for files that no longer exist are kept in JSON. They are never silently deleted — they simply won't render until a buffer with that path is opened.
-- **Reloading**: On `BufReadPost`, notes are re-placed from JSON line numbers. Between sessions, line numbers are the fallback anchor. If the file changed outside Neovim, notes may land on slightly wrong lines (same limitation as any line-based bookmark).
-
-## Storage format
-
-### Local flows
-
-```json
-{
-  "flows": [
-    {
-      "id": "a1b2c3d4-...",
-      "name": "Security Audit",
-      "nodes": [
-        {
-          "id": "e5f6g7h8-...",
-          "file": "/absolute/path/to/file.py",
-          "line": 10,
-          "col_start": 4,
-          "col_end": 20,
-          "color": "FlowRed"
-        }
-      ]
-    }
-  ],
-  "active_flow_id": "a1b2c3d4-..."
-}
-```
+Notes and flows are synced over TCP using the Numscull protocol. The connection begins with a plaintext `control/init` handshake, followed by an ephemeral X25519 key exchange. All subsequent JSON-RPC messages are encrypted with NaCl Box (Poly1305 MAC, counter-based nonces, 528-byte blocks). The Lua client uses FFI bindings to libsodium.
 
 ## Mockscull (reference implementation & schema)
 
-The `mockscull/` directory contains the **reference Python client** and **canonical schemas** for the Numscull protocol. vimscull’s Lua client is a port of this protocol.
+The `mockscull/` directory contains the **reference Python client** and **canonical schemas** for the Numscull protocol. vimscull's Lua client is a port of this protocol.
 
 ### Why it exists
 
@@ -257,7 +201,7 @@ The `mockscull/` directory contains the **reference Python client** and **canoni
 
 1. **Inspect schemas**: Read `mockscull/schema/*.schema.json` for method names, param shapes, and response structures. Compare with `lua/numscull/notes.lua`, `flow.lua`, `control.lua`.
 2. **Run Mockscull tests**: From repo root, `cd mockscull && pip install -e ".[dev]" && pytest tests/ -v`. Requires `numscull_native` binary or use `tests/mock_server.py` as the server.
-3. **Cross-check Lua vs Python**: Compare `mockscull/src/numscull/client.py` method signatures and params with the Lua client’s `request()` calls in `lua/numscull/notes.lua`, `flow.lua`, `control.lua`.
+3. **Cross-check Lua vs Python**: Compare `mockscull/src/numscull/client.py` method signatures and params with the Lua client's `request()` calls in `lua/numscull/notes.lua`, `flow.lua`, `control.lua`.
 4. **Wire protocol**: `mockscull/src/numscull/transport.py` and `crypto.py` document the wire format. `lua/numscull/transport.lua` and `crypto.lua` must match (10-byte header, 528-byte blocks, counter nonces).
 
 See `mockscull/README.md` for full protocol documentation and module/method tables.
