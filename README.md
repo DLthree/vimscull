@@ -4,11 +4,11 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 
 ## Demo
 
-![vimscull Demo — Connect, add/edit notes with float editor, create flows, add nodes](demo/vimscull-demo.svg)
+![vimscull Demo — Connect, add/edit notes, create flows, add nodes](demo/vimscull-demo.svg)
 
 Features shown:
 - **Server connection** and project management
-- **Notes**: Add and edit annotations with two-pane float editor
+- **Notes**: Add and edit annotations with inline virtual text
 - **Flows**: Create code flow highlighting, add colored nodes, list flows
 - **Modern UI**: lualine statusline, dressing.nvim prompts
 

@@ -81,9 +81,7 @@ require("lazy").setup({
         identity = "demo-reviewer",
         config_dir = config_dir,
         icon = "📝",
-        editor = "float",  -- Use two-pane float editor
-        context_lines = 10,
-        float_border = "rounded",
+        editor = "inline",  -- Use inline editor (virt_lines) instead of float
         auto_connect = false,
         auto_fetch = false,
       })

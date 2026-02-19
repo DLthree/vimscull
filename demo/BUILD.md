@@ -19,13 +19,14 @@ npm install -g svg-term-cli
 
 ## Unified demo (all features)
 
-Demonstrates: `:NumscullConnect`, `:NumscullProject`, `:NoteAdd`, `:NoteEdit` (float editor),
+Demonstrates: `:NumscullConnect`, `:NumscullProject`, `:NoteAdd`, `:NoteEdit` (inline editor),
 `:NoteList`, `:FlowCreate`, `:FlowAddNode`, `:FlowList`, `:NumscullDisconnect`.
 
 ### Recording
 
 ```bash
 # Pre-install plugins (run once, or when plugins change)
+# This also checks for required dependencies
 python3 demo/pre_setup_plugins.py
 
 # Record the demo
@@ -34,9 +35,10 @@ python3 demo/record_unified_demo.py
 
 The script:
 1. Pre-installs Neovim plugins (lazy.nvim, lualine, dressing.nvim)
-2. Starts a mock Numscull server
-3. Records a complete workflow showing all features
-4. Shuts down the server
+2. Checks for required system dependencies (libsodium-dev, pynacl, neovim, asciinema)
+3. Starts a mock Numscull server
+4. Records a complete workflow showing all features
+5. Shuts down the server
 
 ### Converting to animated SVG
 
