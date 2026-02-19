@@ -646,6 +646,7 @@ function M.edit_float(note, source_bufnr)
   local kopts = { noremap = true, silent = true }
   api.nvim_buf_set_keymap(note_buf, "n", "<leader>s", "", vim.tbl_extend("force", kopts, { callback = save }))
   api.nvim_buf_set_keymap(note_buf, "n", "q", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
+  api.nvim_buf_set_keymap(note_buf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
 
   -- :w saves the note via BufWriteCmd
   api.nvim_create_autocmd("BufWriteCmd", {
@@ -771,6 +772,7 @@ function M.edit_inline(note, source_bufnr)
   local kopts = { noremap = true, silent = true }
   api.nvim_buf_set_keymap(note_buf, "n", "<leader>s", "", vim.tbl_extend("force", kopts, { callback = save }))
   api.nvim_buf_set_keymap(note_buf, "n", "q", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
+  api.nvim_buf_set_keymap(note_buf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
   api.nvim_buf_set_keymap(note_buf, "n", "gf", "", vim.tbl_extend("force", kopts, { callback = jump_to_source }))
 
   -- :w saves the note via BufWriteCmd
