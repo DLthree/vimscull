@@ -23,11 +23,18 @@ M.palette = {
   { name = "Magenta", hl = "FlowMagenta", fg = "#ff55ff", bg = "#3a153a" },
 }
 
+M.config = {}
+
 -- Map hex colors to highlight group names (created on demand)
 local hex_hl_cache = {}
 
+local function get_palette()
+  return M.config.palette or M.palette
+end
+
 local function hl_setup()
-  for _, c in ipairs(M.palette) do
+  local palette = get_palette()
+  for _, c in ipairs(palette) do
     api.nvim_set_hl(0, c.hl, { fg = c.fg, bg = c.bg, default = true })
   end
   api.nvim_set_hl(0, "FlowSelect", { link = "PmenuSel", default = true })
@@ -39,7 +46,8 @@ end
 local function hl_for_hex(hex)
   if not hex or hex == "" then hex = "#888888" end
   -- Check if it matches a palette entry
-  for _, c in ipairs(M.palette) do
+  local palette = get_palette()
+  for _, c in ipairs(palette) do
     if c.fg == hex or c.hl == hex then return c.hl end
   end
   if hex_hl_cache[hex] then return hex_hl_cache[hex] end
@@ -149,7 +157,8 @@ local function decorate_all_bufs()
 end
 
 --- Setup highlight groups and autocommands for flow decoration.
-function M.setup()
+function M.setup(opts)
+  M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   hl_setup()
   local grp = api.nvim_create_augroup("NumscullFlows", { clear = true })
   api.nvim_create_autocmd("BufReadPost", {
@@ -394,14 +403,15 @@ function M.add_node_visual(flow_id)
   end
 
   local color_names = {}
-  for _, c in ipairs(M.palette) do
+  local palette = get_palette()
+  for _, c in ipairs(palette) do
     color_names[#color_names + 1] = c.name
   end
 
   vim.ui.select(color_names, { prompt = "Pick node color:" }, function(choice)
     if not choice then return end
     local color = "#888888"
-    for _, c in ipairs(M.palette) do
+    for _, c in ipairs(palette) do
       if c.name == choice then color = c.fg; break end
     end
     vim.ui.input({ prompt = "Node note: " }, function(note)

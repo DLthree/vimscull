@@ -424,7 +424,7 @@ function M.list()
       if target and target.note then
         vim.cmd("wincmd p")
         pcall(api.nvim_win_set_cursor, 0, { target.line, 0 })
-        M.edit()
+        M.edit_open()
       end
     end,
   }))
@@ -646,6 +646,7 @@ function M.edit_float(note, source_bufnr)
   local kopts = { noremap = true, silent = true }
   api.nvim_buf_set_keymap(note_buf, "n", "<leader>s", "", vim.tbl_extend("force", kopts, { callback = save }))
   api.nvim_buf_set_keymap(note_buf, "n", "q", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
+  api.nvim_buf_set_keymap(note_buf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
 
   -- :w saves the note via BufWriteCmd
   api.nvim_create_autocmd("BufWriteCmd", {
@@ -771,6 +772,7 @@ function M.edit_inline(note, source_bufnr)
   local kopts = { noremap = true, silent = true }
   api.nvim_buf_set_keymap(note_buf, "n", "<leader>s", "", vim.tbl_extend("force", kopts, { callback = save }))
   api.nvim_buf_set_keymap(note_buf, "n", "q", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
+  api.nvim_buf_set_keymap(note_buf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
   api.nvim_buf_set_keymap(note_buf, "n", "gf", "", vim.tbl_extend("force", kopts, { callback = jump_to_source }))
 
   -- :w saves the note via BufWriteCmd
@@ -860,7 +862,12 @@ function M.search_results(results, title)
     callback = function()
       local target = jump_map[api.nvim_win_get_cursor(0)[1]]
       if target and target.note then
-        M.edit_float(target.note)
+        vim.cmd("wincmd p")
+        if buf_fpath(api.nvim_get_current_buf()) ~= target.path then
+          vim.cmd("edit " .. fn.fnameescape(target.path))
+        end
+        pcall(api.nvim_win_set_cursor, 0, { target.line, 0 })
+        M.edit_open()
       end
     end,
   }))

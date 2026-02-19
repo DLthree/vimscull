@@ -22,6 +22,7 @@ M.config = {
   float_width = 0.8,
   float_height = 0.7,
   split_direction = "vertical",
+  palette = nil,              -- Custom palette for flow colors (falls back to default)
 }
 
 local augroup = nil
@@ -38,7 +39,9 @@ function M.setup(opts)
     float_height = M.config.float_height,
     split_direction = M.config.split_direction,
   })
-  flow.setup()
+  flow.setup({
+    palette = M.config.palette,
+  })
 
   augroup = api.nvim_create_augroup("Numscull", { clear = true })
   if M.config.auto_fetch then
