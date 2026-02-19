@@ -75,11 +75,11 @@ def main():
             ["rec", "--overwrite", "-c", str(LAUNCH_SCRIPT), str(CAST_FILE)],
             encoding="utf-8",
             dimensions=(35, 100),
-            timeout=30,
+            timeout=120,
         )
 
-        # Wait for nvim to fully load
-        pause(4)
+        # Wait for nvim to fully load (with lazy.nvim plugin installation)
+        pause(15)
 
         # -- SCENE 1: Connect to server and set up project --
         escape(child)
