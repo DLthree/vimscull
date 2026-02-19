@@ -2,19 +2,15 @@
 
 Persistent, collaborative audit annotations and code flow highlighting for Neovim — rendered inline using extmarks. All data synced via the Numscull protocol.
 
-## Demos
+## Demo
 
-### Notes (server-connected annotations)
+![vimscull Demo — Connect, add/edit notes, create flows, add nodes](demo/vimscull-demo.svg)
 
-![Notes Tutorial — connect, add, edit, search, delete](demo/notes-tutorial.svg)
-
-### Search & Tags
-
-![Search Tutorial — tagged notes, search, tag counts](demo/search-tutorial.svg)
-
-### Flows (server-connected code flow highlighting)
-
-![Flow Tutorial — create, navigate, switch](demo/flow-tutorial.svg)
+Features shown:
+- **Server connection** and project management
+- **Notes**: Add notes via command args, edit with inline editor (no floating windows)
+- **Flows**: Create code flow highlighting, add colored nodes, list flows
+- **Modern UI**: lualine statusline
 
 ## Features
 
