@@ -134,6 +134,8 @@ local function decorate_buf(bufnr)
         end_row = row,
         end_col = col_e,
         hl_group = hl,
+        right_gravity = false,
+        end_right_gravity = false,
       })
     end
   end
