@@ -87,7 +87,11 @@ end, { nargs = "?", desc = "Add note at cursor" })
 
 vim.api.nvim_create_user_command("NoteEdit", function()
   numscull.edit()
-end, { desc = "Edit closest note" })
+end, { desc = "Edit closest note (quick inline prompt)" })
+
+vim.api.nvim_create_user_command("NoteEditOpen", function()
+  numscull.edit_open()
+end, { desc = "Edit closest note in floating editor" })
 
 vim.api.nvim_create_user_command("NoteDelete", function()
   numscull.delete()
@@ -116,8 +120,7 @@ vim.api.nvim_create_user_command("NoteSearch", function(opts)
     return
   end
   local notes = result.notes or {}
-  vim.notify(string.format("[numscull] %d notes found", #notes), vim.log.levels.INFO)
-  -- TODO: display in scratch buffer
+  numscull.search_results(notes, string.format("Search: %s (%d results)", opts.args, #notes))
 end, { nargs = 1, desc = "Search notes by text" })
 
 vim.api.nvim_create_user_command("NoteSearchTags", function(opts)
@@ -131,7 +134,7 @@ vim.api.nvim_create_user_command("NoteSearchTags", function(opts)
     return
   end
   local notes = result.notes or {}
-  vim.notify(string.format("[numscull] %d notes with tag", #notes), vim.log.levels.INFO)
+  numscull.search_results(notes, string.format("Tag: #%s (%d results)", opts.args, #notes))
 end, { nargs = 1, desc = "Search notes by tag" })
 
 vim.api.nvim_create_user_command("NoteTagCount", function()
@@ -149,18 +152,32 @@ end, { desc = "Show tag counts" })
 -- Flows
 vim.api.nvim_create_user_command("FlowCreate", function(opts)
   local args = vim.split(opts.args or "", "%s+", { plain = true })
-  local name = args[1] or vim.fn.input("Flow name: ")
-  if name == "" then return end
-  local desc = args[2] or ""
-  if #args > 2 then
-    desc = table.concat(args, " ", 2)
+  -- Filter out empty strings from split result
+  local non_empty = {}
+  for _, a in ipairs(args) do
+    if a ~= "" then non_empty[#non_empty + 1] = a end
   end
-  local result, err = numscull.flow_create(name, desc)
-  if err then
-    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
-    return
+
+  local function do_create(name, desc)
+    if not name or name == "" then return end
+    local result, err = numscull.flow_create(name, desc or "")
+    if err then
+      vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("[numscull] flow created", vim.log.levels.INFO)
   end
-  vim.notify("[numscull] flow created", vim.log.levels.INFO)
+
+  if #non_empty >= 1 then
+    local name = non_empty[1]
+    local desc = #non_empty > 1 and table.concat(non_empty, " ", 2) or ""
+    do_create(name, desc)
+  else
+    vim.ui.input({ prompt = "Flow name: " }, function(name)
+      if not name or name == "" then return end
+      do_create(name, "")
+    end)
+  end
 end, { nargs = "*", desc = "Create a flow (becomes the active flow)" })
 
 vim.api.nvim_create_user_command("FlowDelete", function()

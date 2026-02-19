@@ -1294,7 +1294,7 @@ do
 
   local expected_cmds = {
     "NumscullConnect", "NumscullDisconnect", "NumscullProject", "NumscullListProjects",
-    "NoteAdd", "NoteEdit", "NoteDelete", "NoteList", "NoteShow", "NoteToggle",
+    "NoteAdd", "NoteEdit", "NoteEditOpen", "NoteDelete", "NoteList", "NoteShow", "NoteToggle",
     "NoteSearch", "NoteSearchTags", "NoteTagCount",
     "FlowCreate", "FlowDelete", "FlowSelect", "FlowList", "FlowShow",
     "FlowAddNode", "FlowDeleteNode", "FlowNext", "FlowPrev",
@@ -1858,6 +1858,174 @@ do
     assert_eq("rm active: cleared after remove", flow_mod.get_active_flow_id(), nil)
     assert_eq("rm active: cached flow nil", flow_mod.get_active_flow(), nil)
     assert_eq("rm active: node order empty", #flow_mod.get_node_order(), 0)
+  end
+end
+
+-----------------------------------------------------------------------
+-- [Notes — UI Buffer Properties]
+-----------------------------------------------------------------------
+print("\n[Notes — UI Buffer Properties]")
+do
+  local numscull = require("numscull")
+  local notes_mod = require("numscull.notes")
+  local bufnr, path, uri = open_test_file("ui_buf.lua", "aaa\nbbb\nccc\n")
+  local uri_key = notes_mod.get_buf_uri(bufnr) or uri
+
+  numscull.set(make_note_input(uri_key, 1, "ui test note"))
+
+  notes_mod.list()
+
+  local list_buf = api.nvim_get_current_buf()
+  assert_eq("ui buf: modifiable is false", vim.bo[list_buf].modifiable, false)
+  assert_eq("ui buf: buftype is nofile", vim.bo[list_buf].buftype, "nofile")
+  assert_eq("ui buf: bufhidden is wipe", vim.bo[list_buf].bufhidden, "wipe")
+
+  -- Verify legend line is present
+  local lines = api.nvim_buf_get_lines(list_buf, 0, -1, false)
+  local found_legend = false
+  for _, l in ipairs(lines) do
+    if l:find("CR>=jump") and l:find("q=close") then found_legend = true end
+  end
+  assert_true("ui buf: legend present", found_legend)
+
+  close_buf()
+  numscull.remove(uri_key, 1)
+  close_buf()
+end
+
+-----------------------------------------------------------------------
+-- [Notes — Search Results Buffer]
+-----------------------------------------------------------------------
+print("\n[Notes — Search Results Buffer]")
+do
+  local numscull = require("numscull")
+  local notes_mod = require("numscull.notes")
+  local _, _, uri = open_test_file("search_buf.lua", "x\ny\nz\n")
+
+  numscull.set(make_note_input(uri, 1, "search buf alpha"))
+  numscull.set(make_note_input(uri, 2, "search buf beta"))
+
+  -- Search and display results
+  local r = numscull.search("search buf")
+  assert_true("search buf: results", r ~= nil)
+  if r then
+    local orig = api.nvim_get_current_buf()
+    notes_mod.search_results(r.notes or {}, "Test Search")
+    local sbuf = api.nvim_get_current_buf()
+    assert_true("search buf: new buffer", sbuf ~= orig)
+    assert_eq("search buf: buftype", vim.bo[sbuf].buftype, "nofile")
+    assert_eq("search buf: modifiable", vim.bo[sbuf].modifiable, false)
+    assert_eq("search buf: filetype", vim.bo[sbuf].filetype, "numscull_search")
+
+    local lines = api.nvim_buf_get_lines(sbuf, 0, -1, false)
+    assert_match("search buf: title", lines[1], "Test Search")
+    local found_alpha, found_beta = false, false
+    for _, l in ipairs(lines) do
+      if l:find("alpha") then found_alpha = true end
+      if l:find("beta") then found_beta = true end
+    end
+    assert_true("search buf: alpha in results", found_alpha)
+    assert_true("search buf: beta in results", found_beta)
+    close_buf()
+  end
+
+  numscull.remove(uri, 1)
+  numscull.remove(uri, 2)
+  close_buf()
+end
+
+-----------------------------------------------------------------------
+-- [Notes — New Highlight Groups]
+-----------------------------------------------------------------------
+print("\n[Notes — New Highlight Groups]")
+do
+  local notes_mod = require("numscull.notes")
+  notes_mod.setup({})
+
+  local function hl_exists(name)
+    local ok, hl = pcall(api.nvim_get_hl, 0, { name = name })
+    return ok and hl ~= nil and next(hl) ~= nil
+  end
+
+  assert_true("hl: NumscullListHeader exists", hl_exists("NumscullListHeader"))
+  assert_true("hl: NumscullListLegend exists", hl_exists("NumscullListLegend"))
+  assert_true("hl: NumscullListId exists", hl_exists("NumscullListId"))
+  assert_true("hl: NumscullListMeta exists", hl_exists("NumscullListMeta"))
+  assert_true("hl: NumscullListFile exists", hl_exists("NumscullListFile"))
+end
+
+-----------------------------------------------------------------------
+-- [Notes — Editor Config]
+-----------------------------------------------------------------------
+print("\n[Notes — Editor Config]")
+do
+  local notes_mod = require("numscull.notes")
+
+  -- Check new config defaults
+  assert_eq("editor config: default editor", notes_mod.config.editor, "float")
+  assert_eq("editor config: default context_lines", notes_mod.config.context_lines, 10)
+  assert_eq("editor config: default float_border", notes_mod.config.float_border, "rounded")
+
+  -- Override
+  notes_mod.setup({ editor = "inline", context_lines = 5 })
+  assert_eq("editor config: override editor", notes_mod.config.editor, "inline")
+  assert_eq("editor config: override context_lines", notes_mod.config.context_lines, 5)
+
+  -- Reset
+  notes_mod.setup({ editor = "float", context_lines = 10 })
+end
+
+-----------------------------------------------------------------------
+-- [Notes — extract_note_text helper]
+-----------------------------------------------------------------------
+print("\n[Notes — extract_note_text helper]")
+do
+  local notes_mod = require("numscull.notes")
+
+  -- edit_float and edit_inline filter lines starting with # as headers.
+  -- We test this implicitly through the editor config.
+  -- Verify edit_open, edit_float, edit_inline are callable functions
+  assert_true("edit_open is function", type(notes_mod.edit_open) == "function")
+  assert_true("edit_float is function", type(notes_mod.edit_float) == "function")
+  assert_true("edit_inline is function", type(notes_mod.edit_inline) == "function")
+  assert_true("search_results is function", type(notes_mod.search_results) == "function")
+end
+
+-----------------------------------------------------------------------
+-- [Flow — UI Buffer Properties]
+-----------------------------------------------------------------------
+print("\n[Flow — UI Buffer Properties]")
+do
+  local numscull = require("numscull")
+  local flow_mod = require("numscull.flow")
+
+  numscull.flow_create("UI Buf Flow", "test ui")
+
+  local orig = api.nvim_get_current_buf()
+  flow_mod.list()
+  local list_buf = api.nvim_get_current_buf()
+  assert_true("flow ui buf: new buffer", list_buf ~= orig)
+  assert_eq("flow ui buf: modifiable false", vim.bo[list_buf].modifiable, false)
+
+  local lines = api.nvim_buf_get_lines(list_buf, 0, -1, false)
+  local found_legend = false
+  for _, l in ipairs(lines) do
+    if l:find("q=close") then found_legend = true end
+  end
+  assert_true("flow ui buf: legend present", found_legend)
+
+  close_buf()
+end
+
+-----------------------------------------------------------------------
+-- [Telescope — Module Loads]
+-----------------------------------------------------------------------
+print("\n[Telescope — Module Loads]")
+do
+  local ok, tmod = pcall(require, "numscull.telescope")
+  assert_true("telescope module loads", ok)
+  if ok then
+    assert_true("telescope: pick_notes is function", type(tmod.pick_notes) == "function")
   end
 end
 

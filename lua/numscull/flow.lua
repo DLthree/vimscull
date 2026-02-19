@@ -32,6 +32,7 @@ local function hl_setup()
   end
   api.nvim_set_hl(0, "FlowSelect", { link = "PmenuSel", default = true })
   api.nvim_set_hl(0, "FlowHeader", { link = "Title", default = true })
+  api.nvim_set_hl(0, "NumscullDim", { link = "Comment", default = true })
 end
 
 --- Get or create a highlight group for a hex color.
@@ -354,19 +355,28 @@ function M.add_node_at_cursor(flow_id, note, color)
     vim.notify("[numscull] buffer has no file", vim.log.levels.WARN)
     return
   end
-  note = note or fn.input("Node note: ")
   color = color or "#888888"
   local fid = flow_id or state.active_flow_id
   local opts = fid and { flowId = fid } or {}
-  local result, err = M.add_node(loc, note, color, opts)
-  if err then
-    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
-    return
+
+  local function do_add(n)
+    if not n then return end
+    local result, err = M.add_node(loc, n, color, opts)
+    if err then
+      vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("[numscull] node added", vim.log.levels.INFO)
   end
-  vim.notify("[numscull] node added", vim.log.levels.INFO)
+
+  if note then
+    do_add(note)
+  else
+    vim.ui.input({ prompt = "Node note: " }, do_add)
+  end
 end
 
---- Add node from visual selection (interactive — prompts for color).
+--- Add node from visual selection (interactive — prompts for color via vim.ui.select).
 function M.add_node_visual(flow_id)
   if not client.is_connected() then
     vim.notify("[numscull] not connected", vim.log.levels.ERROR)
@@ -383,27 +393,30 @@ function M.add_node_visual(flow_id)
     return
   end
 
-  local prompt = "Pick color: "
-  for i, c in ipairs(M.palette) do
-    prompt = prompt .. string.format("%d=%s ", i, c.name)
-  end
-  local choice = fn.input(prompt)
-  local idx = tonumber(choice)
-  local color = "#888888"
-  if idx and idx >= 1 and idx <= #M.palette then
-    color = M.palette[idx].fg
+  local color_names = {}
+  for _, c in ipairs(M.palette) do
+    color_names[#color_names + 1] = c.name
   end
 
-  local note = fn.input("Node note: ")
-  local result, err = M.add_node(loc, note, color, { flowId = fid })
-  if err then
-    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
-    return
-  end
-  vim.notify(string.format("[numscull] node added (line %d)", loc.line), vim.log.levels.INFO)
+  vim.ui.select(color_names, { prompt = "Pick node color:" }, function(choice)
+    if not choice then return end
+    local color = "#888888"
+    for _, c in ipairs(M.palette) do
+      if c.name == choice then color = c.fg; break end
+    end
+    vim.ui.input({ prompt = "Node note: " }, function(note)
+      if not note then return end
+      local result, err = M.add_node(loc, note, color, { flowId = fid })
+      if err then
+        vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+        return
+      end
+      vim.notify(string.format("[numscull] node added (line %d)", loc.line), vim.log.levels.INFO)
+    end)
+  end)
 end
 
---- Delete the active flow (with confirmation).
+--- Delete the active flow (with vim.ui.select confirmation).
 function M.delete()
   if not client.is_connected() then
     vim.notify("[numscull] not connected", vim.log.levels.ERROR)
@@ -415,14 +428,17 @@ function M.delete()
   end
   local flow = state.cached_flow
   local name = (flow and flow.info and flow.info.name) or "?"
-  local ok = fn.input(string.format("Delete flow '%s'? (y/N): ", name))
-  if ok ~= "y" and ok ~= "Y" then return end
-  local result, err = M.remove(state.active_flow_id)
-  if err then
-    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
-    return
-  end
-  vim.notify("[numscull] flow deleted", vim.log.levels.INFO)
+  vim.ui.select({ "Yes", "No" }, {
+    prompt = string.format("Delete flow '%s'?", name),
+  }, function(choice)
+    if choice ~= "Yes" then return end
+    local result, err = M.remove(state.active_flow_id)
+    if err then
+      vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("[numscull] flow deleted", vim.log.levels.INFO)
+  end)
 end
 
 --- Remove closest node near cursor from the active flow.
@@ -566,7 +582,7 @@ function M.select()
     return
   end
 
-  local lines = { " Flows (press number to select, n=new, d=delete, q=quit)", "" }
+  local lines = { " Flows", " <CR>=select  n=new  d=delete  q=close", "" }
   for i, info in ipairs(infos) do
     local marker = (info.infoId == state.active_flow_id) and " * " or "   "
     local node_info = (info.description or ""):sub(1, 30)
@@ -598,6 +614,7 @@ function M.select()
   local win = api.nvim_open_win(buf, true, win_opts)
 
   api.nvim_buf_add_highlight(buf, -1, "FlowHeader", 0, 0, -1)
+  api.nvim_buf_add_highlight(buf, -1, "NumscullDim", 1, 0, -1)
   for i, info in ipairs(infos) do
     if info.infoId == state.active_flow_id then
       api.nvim_buf_add_highlight(buf, -1, "FlowSelect", i + 1, 0, -1)
@@ -636,15 +653,17 @@ function M.select()
     noremap = true, silent = true,
     callback = function()
       close()
-      local name = fn.input("Flow name: ")
-      if name == "" then return end
-      local desc = fn.input("Description: ")
-      local r, e = M.create(name, desc)
-      if e then
-        vim.notify("[numscull] " .. tostring(e), vim.log.levels.ERROR)
-      else
-        vim.notify("[numscull] flow created: " .. name, vim.log.levels.INFO)
-      end
+      vim.ui.input({ prompt = "Flow name: " }, function(name)
+        if not name or name == "" then return end
+        vim.ui.input({ prompt = "Description: " }, function(desc)
+          local r, e = M.create(name, desc or "")
+          if e then
+            vim.notify("[numscull] " .. tostring(e), vim.log.levels.ERROR)
+          else
+            vim.notify("[numscull] flow created: " .. name, vim.log.levels.INFO)
+          end
+        end)
+      end)
     end,
   })
 
@@ -655,6 +674,22 @@ function M.select()
 
   api.nvim_buf_set_keymap(buf, "n", "q", "", { noremap = true, silent = true, callback = close })
   api.nvim_buf_set_keymap(buf, "n", "<Esc>", "", { noremap = true, silent = true, callback = close })
+end
+
+--- Helper: set common UI buffer options and close keymaps.
+local function setup_ui_buf(sbuf)
+  vim.bo[sbuf].buftype = "nofile"
+  vim.bo[sbuf].bufhidden = "wipe"
+  vim.bo[sbuf].swapfile = false
+  vim.bo[sbuf].modifiable = false
+  vim.wo[0].cursorline = true
+  local kopts = { noremap = true, silent = true }
+  api.nvim_buf_set_keymap(sbuf, "n", "q", "", vim.tbl_extend("force", kopts, {
+    callback = function() vim.cmd("bwipeout!") end,
+  }))
+  api.nvim_buf_set_keymap(sbuf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, {
+    callback = function() vim.cmd("bwipeout!") end,
+  }))
 end
 
 --- List all flows in scratch buffer.
@@ -669,19 +704,55 @@ function M.list()
     vim.notify("[numscull] no flows", vim.log.levels.INFO)
     return
   end
-  local lines = { "# Flows", "" }
+  local legend = "<CR>=select  d=delete  r=refresh  q=close"
+  local lines = { "Flows", legend, "" }
+  local select_map = {}  -- row -> infoId
   for _, info in ipairs(infos) do
     local marker = (info.infoId == state.active_flow_id) and " * " or "   "
     lines[#lines + 1] = string.format("%s%d  %s — %s",
       marker, info.infoId or 0, info.name or "?", (info.description or ""):sub(1, 40))
+    select_map[#lines] = info.infoId
   end
   vim.cmd("botright new")
   local sbuf = api.nvim_get_current_buf()
   api.nvim_buf_set_lines(sbuf, 0, -1, false, lines)
-  vim.bo[sbuf].buftype = "nofile"
-  vim.bo[sbuf].bufhidden = "wipe"
-  vim.bo[sbuf].swapfile = false
   vim.bo[sbuf].filetype = "numscull_flows"
+  setup_ui_buf(sbuf)
+
+  -- Highlights
+  api.nvim_buf_add_highlight(sbuf, -1, "FlowHeader", 0, 0, -1)
+  api.nvim_buf_add_highlight(sbuf, -1, "NumscullDim", 1, 0, -1)
+  for i, info in ipairs(infos) do
+    local row = i + 2  -- 0-indexed: header(0), legend(1), blank(2), entries start at 3
+    if info.infoId == state.active_flow_id then
+      api.nvim_buf_add_highlight(sbuf, -1, "FlowSelect", row, 0, -1)
+    end
+  end
+
+  -- Keymaps
+  local kopts = { noremap = true, silent = true }
+  api.nvim_buf_set_keymap(sbuf, "n", "<CR>", "", vim.tbl_extend("force", kopts, {
+    callback = function()
+      local fid = select_map[api.nvim_win_get_cursor(0)[1]]
+      if fid then
+        M.activate(fid)
+        vim.cmd("bwipeout!")
+        vim.notify("[numscull] active flow changed", vim.log.levels.INFO)
+      end
+    end,
+  }))
+  api.nvim_buf_set_keymap(sbuf, "n", "d", "", vim.tbl_extend("force", kopts, {
+    callback = function()
+      vim.cmd("bwipeout!")
+      M.delete()
+    end,
+  }))
+  api.nvim_buf_set_keymap(sbuf, "n", "r", "", vim.tbl_extend("force", kopts, {
+    callback = function()
+      pcall(vim.cmd, "bwipeout!")
+      M.list()
+    end,
+  }))
 end
 
 --- Show flow details in scratch buffer.
@@ -699,13 +770,16 @@ function M.show(flow_id)
   local flow = result.flow or {}
   local info = flow.info or {}
   local nodes = flow.nodes or {}
+  local legend = "<CR>=jump  q=close"
   local lines = {
     "# " .. (info.name or "Flow") .. " (id=" .. tostring(flow_id) .. ")",
+    legend,
     (info.description or ""):sub(1, 80),
     "",
     "## Nodes",
     "",
   }
+  local header_lines = #lines
   local ordered = build_node_order(nodes)
   for _, entry in ipairs(ordered) do
     local node = entry.node
@@ -722,17 +796,19 @@ function M.show(flow_id)
   vim.cmd("botright new")
   local sbuf = api.nvim_get_current_buf()
   api.nvim_buf_set_lines(sbuf, 0, -1, false, lines)
-  vim.bo[sbuf].buftype = "nofile"
-  vim.bo[sbuf].bufhidden = "wipe"
-  vim.bo[sbuf].swapfile = false
   vim.bo[sbuf].filetype = "numscull_flow"
+  setup_ui_buf(sbuf)
+
+  -- Highlights
+  api.nvim_buf_add_highlight(sbuf, -1, "FlowHeader", 0, 0, -1)
+  api.nvim_buf_add_highlight(sbuf, -1, "NumscullDim", 1, 0, -1)
 
   -- <CR> jumps to node location
-  api.nvim_buf_set_keymap(sbuf, "n", "<CR>", "", {
-    noremap = true, silent = true,
+  local kopts = { noremap = true, silent = true }
+  api.nvim_buf_set_keymap(sbuf, "n", "<CR>", "", vim.tbl_extend("force", kopts, {
     callback = function()
       local row = api.nvim_win_get_cursor(0)[1]
-      local idx = row - 5 -- header is 5 lines
+      local idx = row - header_lines
       if idx >= 1 and idx <= #ordered then
         local node = ordered[idx].node
         local loc = node.location or {}
@@ -746,7 +822,7 @@ function M.show(flow_id)
         end
       end
     end,
-  })
+  }))
 end
 
 return M

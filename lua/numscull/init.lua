@@ -16,13 +16,28 @@ M.config = {
   max_line_len = 120,
   auto_connect = false,
   auto_fetch = true,
+  editor = "float",           -- "float" (two-pane) or "inline" (single-pane with virt_lines)
+  context_lines = 10,
+  float_border = "rounded",
+  float_width = 0.8,
+  float_height = 0.7,
+  split_direction = "vertical",
 }
 
 local augroup = nil
 
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
-  notes.setup({ icon = M.config.icon, max_line_len = M.config.max_line_len })
+  notes.setup({
+    icon = M.config.icon,
+    max_line_len = M.config.max_line_len,
+    editor = M.config.editor,
+    context_lines = M.config.context_lines,
+    float_border = M.config.float_border,
+    float_width = M.config.float_width,
+    float_height = M.config.float_height,
+    split_direction = M.config.split_direction,
+  })
   flow.setup()
 
   augroup = api.nvim_create_augroup("Numscull", { clear = true })
@@ -90,6 +105,9 @@ end
 --- Notes API (re-export).
 M.add = notes.add
 M.edit = notes.edit
+M.edit_open = notes.edit_open
+M.edit_float = notes.edit_float
+M.edit_inline = notes.edit_inline
 M.delete = notes.delete
 M.show = notes.show
 M.list = notes.list
@@ -101,6 +119,7 @@ M.search = notes.search
 M.search_tags = notes.search_tags
 M.search_columns = notes.search_columns
 M.tag_count = notes.tag_count
+M.search_results = notes.search_results
 
 --- Flow API (re-export).
 M.flow_create = flow.create
