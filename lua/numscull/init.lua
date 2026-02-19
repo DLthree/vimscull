@@ -5,6 +5,7 @@ local api = vim.api
 local control = require("numscull.control")
 local notes = require("numscull.notes")
 local flow = require("numscull.flow")
+local client = require("numscull.client")
 
 M.config = {
   host = "127.0.0.1",
