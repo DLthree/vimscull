@@ -111,32 +111,25 @@ def main():
         slow_send(child, ":10\r", delay=0.10)  # Go to line 10
         pause(1.5)
         
-        slow_send(child, ":NoteAdd\r", delay=0.05)
-        pause(2)
-        
-        # Type note text in the input prompt
-        slow_send(child, "Consider using argon2 instead of pbkdf2 #security", delay=0.04)
-        pause(0.5)
-        enter(child)
+        # Add note with text as argument (no prompt)
+        slow_send(child, ":NoteAdd Consider using argon2 instead of pbkdf2 #security\r", delay=0.04)
         pause(3)
         
-        # === SCENE 3: Edit the note (shows float editor) ===
+        # === SCENE 3: Edit the note (shows inline editor) ===
         escape(child)
         pause(0.5)
-        slow_send(child, ":NoteEdit\r", delay=0.05)
-        pause(3)  # Give time to see the float editor appear
+        slow_send(child, ":NoteEditOpen\r", delay=0.05)
+        pause(3)  # Give time to see the inline editor appear
         
-        # Clear and type new text
-        child.send("\x15")  # Ctrl-U to clear line
-        pause(0.5)
-        slow_send(
-            child,
-            r"TODO: migrate to argon2id #security #migration\nSee: OWASP password cheatsheet",
-            delay=0.04,
-        )
+        # Type new text in the inline editor buffer
+        slow_send(child, "iTODO: migrate to argon2id #security #migration", delay=0.04)
         pause(1)
-        enter(child)
-        pause(3)
+        escape(child)
+        pause(0.5)
+        slow_send(child, ":w\r", delay=0.06)  # Save the inline buffer
+        pause(2)
+        slow_send(child, ":q\r", delay=0.06)  # Close the inline buffer
+        pause(2)
         
         # === SCENE 4: List notes ===
         escape(child)

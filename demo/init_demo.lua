@@ -49,12 +49,6 @@ vim.opt.rtp:prepend(lazypath)
 -- Plugins
 -- =========================
 require("lazy").setup({
-  -- UI enhancements for vim.ui.input/select
-  {
-    "stevearc/dressing.nvim",
-    opts = {},
-  },
-
   -- Statusline
   {
     "nvim-lualine/lualine.nvim",

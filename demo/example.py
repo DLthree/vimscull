@@ -7,7 +7,7 @@ import os
 def hash_password(password: str, salt: bytes = None) -> tuple[str, bytes]:
     if salt is None:
         salt = os.urandom(16)
-    hashed = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
+TODO: migrate to argon2id #security #migrationTODO: migrate to argon2id #security #migration    hashed = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
     return hashed.hex(), salt
 
 

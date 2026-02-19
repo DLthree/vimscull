@@ -8,9 +8,9 @@ Persistent, collaborative audit annotations and code flow highlighting for Neovi
 
 Features shown:
 - **Server connection** and project management
-- **Notes**: Add and edit annotations with inline virtual text
+- **Notes**: Add notes via command args, edit with inline editor (no floating windows)
 - **Flows**: Create code flow highlighting, add colored nodes, list flows
-- **Modern UI**: lualine statusline, dressing.nvim prompts
+- **Modern UI**: lualine statusline
 
 ## Features
 
