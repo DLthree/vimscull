@@ -64,6 +64,39 @@ vim.api.nvim_create_user_command("NumscullProject", function(opts)
   end
 end, { nargs = 1, desc = "Change active project" })
 
+-- Quick connect commands
+vim.api.nvim_create_user_command("NumscullQuickConnect", function(opts)
+  local args = vim.split(opts.args or "", "%s+", { plain = true })
+  local non_empty = {}
+  for _, a in ipairs(args) do
+    if a ~= "" then non_empty[#non_empty + 1] = a end
+  end
+  
+  local host = non_empty[1] or numscull.config.host
+  local port = tonumber(non_empty[2]) or numscull.config.port
+  local project = non_empty[3]
+  local save = opts.bang -- Use ! to save config
+  
+  local ok, err = numscull.quick_connect(host, port, project, save)
+  if not ok then
+    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+  else
+    local msg = "[numscull] connected"
+    if project then msg = msg .. " to project " .. project end
+    if save then msg = msg .. " (saved to .numscull/config)" end
+    vim.notify(msg, vim.log.levels.INFO)
+  end
+end, { nargs = "*", bang = true, desc = "Quick connect (host port project) - use ! to save config" })
+
+vim.api.nvim_create_user_command("NumscullQuickConnectAuto", function()
+  local ok, err = numscull.quick_connect_auto()
+  if not ok then
+    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+  else
+    vim.notify("[numscull] connected from .numscull/config", vim.log.levels.INFO)
+  end
+end, { desc = "Auto-connect using .numscull/config" })
+
 vim.api.nvim_create_user_command("NumscullListProjects", function()
   local result, err = numscull.list_projects()
   if err then
@@ -85,9 +118,17 @@ vim.api.nvim_create_user_command("NoteAdd", function(opts)
   numscull.add(opts.args ~= "" and opts.args or nil)
 end, { nargs = "?", desc = "Add note at cursor" })
 
+vim.api.nvim_create_user_command("NoteAddHere", function()
+  numscull.add_here()
+end, { desc = "Add note here with immediate editor" })
+
 vim.api.nvim_create_user_command("NoteEdit", function()
   numscull.edit()
 end, { desc = "Edit closest note (quick inline prompt)" })
+
+vim.api.nvim_create_user_command("NoteEditHere", function()
+  numscull.edit_here()
+end, { desc = "Edit closest note here in editor" })
 
 vim.api.nvim_create_user_command("NoteEditOpen", function()
   numscull.edit_open()
@@ -192,6 +233,10 @@ vim.api.nvim_create_user_command("FlowAddNode", function(opts)
   local flow_id = opts.args ~= "" and tonumber(opts.args) or nil
   numscull.flow_add_node_visual(flow_id)
 end, { range = true, nargs = "?", desc = "Add visual selection as a node to the active flow" })
+
+vim.api.nvim_create_user_command("FlowAddNodeHere", function()
+  numscull.flow_add_node_here()
+end, { desc = "Add node here with smart defaults (name from symbol, last color)" })
 
 vim.api.nvim_create_user_command("FlowDeleteNode", function()
   numscull.flow_delete_node()
