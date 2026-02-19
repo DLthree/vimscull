@@ -3,18 +3,17 @@
 ### Dependencies
 
 ```bash
-# asciinema – terminal recorder
-pip install asciinema
+# System dependencies
+sudo apt-get install -y neovim libsodium-dev
 
-# pexpect – drives terminal sessions programmatically
-pip install pexpect
+# Python dependencies
+pip install asciinema pexpect pynacl
 
-# pynacl – NaCl bindings for mock server
-pip install pynacl
-
-# svg-term-cli – converts .cast → animated .svg
+# Node.js dependency for SVG conversion
 npm install -g svg-term-cli
 ```
+
+**Note**: libsodium-dev is required for the NaCl encryption used by vimscull. Without it, crypto operations will fail.
 
 ---
 
