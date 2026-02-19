@@ -424,7 +424,7 @@ function M.list()
       if target and target.note then
         vim.cmd("wincmd p")
         pcall(api.nvim_win_set_cursor, 0, { target.line, 0 })
-        M.edit()
+        M.edit_open()
       end
     end,
   }))
@@ -860,7 +860,12 @@ function M.search_results(results, title)
     callback = function()
       local target = jump_map[api.nvim_win_get_cursor(0)[1]]
       if target and target.note then
-        M.edit_float(target.note)
+        vim.cmd("wincmd p")
+        if buf_fpath(api.nvim_get_current_buf()) ~= target.path then
+          vim.cmd("edit " .. fn.fnameescape(target.path))
+        end
+        pcall(api.nvim_win_set_cursor, 0, { target.line, 0 })
+        M.edit_open()
       end
     end,
   }))
