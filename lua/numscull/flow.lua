@@ -895,14 +895,20 @@ local function get_symbol_at_cursor()
 end
 
 --- Get default node name for current cursor position.
---- Uses symbol name if available, otherwise filename:line.
+--- Uses symbol name if available, otherwise current word under cursor.
 local function get_default_node_name()
   local symbol = get_symbol_at_cursor()
   if symbol then
     return symbol
   end
   
-  -- Fallback to filename:line
+  -- Fallback to current word under cursor
+  local word = fn.expand("<cword>")
+  if word and word ~= "" then
+    return word
+  end
+  
+  -- Final fallback to filename:line
   local bufnr = api.nvim_get_current_buf()
   local name = api.nvim_buf_get_name(bufnr)
   if name == "" then return "untitled" end

@@ -17,6 +17,7 @@ M.config = {
   max_line_len = 120,
   auto_connect = false,
   auto_fetch = true,
+  quick_connect_auto = false, -- Auto-connect from .numscull/config on startup
   editor = "float",           -- "float" (two-pane) or "inline" (single-pane with virt_lines)
   context_lines = 10,
   float_border = "rounded",
@@ -28,6 +29,8 @@ M.config = {
   mappings = {
     note_add = "<leader>na",
     note_edit = "<leader>ne",
+    flow_add_node_here = nil, -- Optional mapping for FlowAddNodeHere
+    flow_select = nil,        -- Optional mapping for FlowSelect
   },
 }
 
@@ -63,6 +66,11 @@ function M.setup(opts)
 
   if M.config.auto_connect and M.config.identity and M.config.config_dir then
     M.connect()
+  end
+  
+  -- Auto-connect from .numscull/config if enabled
+  if M.config.quick_connect_auto then
+    M.quick_connect(false)  -- false = don't save
   end
 end
 
@@ -156,42 +164,9 @@ local function save_config_file(config_path, config)
   return true
 end
 
---- Quick connect: connect to server and optionally open a project.
---- Optionally saves settings to .numscull/config if save_config is true.
-function M.quick_connect(host, port, project_name, save_config)
-  host = host or M.config.host
-  port = port or M.config.port
-  
-  local ok, err = M.connect(host, port)
-  if not ok then
-    return nil, err
-  end
-  
-  if project_name then
-    local result, err2 = control.change_project(project_name)
-    if not result then
-      return nil, err2
-    end
-    M.config.project = project_name
-  end
-  
-  if save_config then
-    local config_path = vim.fn.getcwd() .. "/.numscull/config"
-    local cfg = {
-      host = tostring(host),
-      port = tostring(port),
-    }
-    if project_name then
-      cfg.project = project_name
-    end
-    save_config_file(config_path, cfg)
-  end
-  
-  return true
-end
-
---- Quick connect auto: read .numscull/config and auto-connect.
-function M.quick_connect_auto()
+--- Quick connect: read from .numscull/config and connect.
+--- Optionally saves settings back if save_config is true.
+function M.quick_connect(save_config)
   local config_path = vim.fn.getcwd() .. "/.numscull/config"
   local cfg, err = load_config_file(config_path)
   
@@ -203,7 +178,31 @@ function M.quick_connect_auto()
   local port = tonumber(cfg.port) or M.config.port
   local project_name = cfg.project
   
-  return M.quick_connect(host, port, project_name, false)
+  local ok, err2 = M.connect(host, port)
+  if not ok then
+    return nil, err2
+  end
+  
+  if project_name then
+    local result, err3 = control.change_project(project_name)
+    if not result then
+      return nil, err3
+    end
+    M.config.project = project_name
+  end
+  
+  if save_config then
+    local cfg_to_save = {
+      host = tostring(host),
+      port = tostring(port),
+    }
+    if project_name then
+      cfg_to_save.project = project_name
+    end
+    save_config_file(config_path, cfg_to_save)
+  end
+  
+  return true
 end
 
 --- Get status information for statusline/winbar.

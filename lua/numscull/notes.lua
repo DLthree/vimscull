@@ -960,6 +960,21 @@ local function setup_buffer_mappings(bufnr)
       M.edit_here()
     end, vim.tbl_extend('force', opts, { desc = 'Edit note here' }))
   end
+  
+  -- Flow mappings (if flow module is available)
+  if M.config.mappings and M.config.mappings.flow_add_node_here then
+    local flow = require('numscull.flow')
+    vim.keymap.set('n', M.config.mappings.flow_add_node_here, function()
+      flow.add_node_here()
+    end, vim.tbl_extend('force', opts, { desc = 'Add flow node here' }))
+  end
+  
+  if M.config.mappings and M.config.mappings.flow_select then
+    local flow = require('numscull.flow')
+    vim.keymap.set('n', M.config.mappings.flow_select, function()
+      flow.select()
+    end, vim.tbl_extend('force', opts, { desc = 'Select flow' }))
+  end
 end
 
 --- Expose setup_buffer_mappings
@@ -970,8 +985,15 @@ function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   hl_setup()
   
-  -- Setup buffer mappings on BufEnter if configured
-  if M.config.mappings and (M.config.mappings.note_add or M.config.mappings.note_edit) then
+  -- Setup buffer mappings on BufEnter if any mapping is configured
+  local has_mappings = M.config.mappings and (
+    M.config.mappings.note_add or 
+    M.config.mappings.note_edit or
+    M.config.mappings.flow_add_node_here or
+    M.config.mappings.flow_select
+  )
+  
+  if has_mappings then
     local grp = api.nvim_create_augroup("NumscullMappings", { clear = true })
     api.nvim_create_autocmd("BufEnter", {
       group = grp,
