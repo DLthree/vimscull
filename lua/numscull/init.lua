@@ -7,6 +7,19 @@ local notes = require("numscull.notes")
 local flow = require("numscull.flow")
 local client = require("numscull.client")
 
+-- Demo logging helper (enabled via NUMSCULL_DEMO env var)
+local function demo_log(func_name, status)
+  if os.getenv("NUMSCULL_DEMO") == "1" then
+    -- Print the log message, then immediately clear it from the command line
+    -- The log will still appear in the recording but won't clutter the screen
+    local msg = string.format("[NUMSCULL_DEMO] %s: %s", func_name, status)
+    -- Use echo to print, then clear the command line
+    vim.api.nvim_echo({{msg, "Comment"}}, false, {})
+    -- Clear by moving cursor and printing spaces
+    vim.cmd("redraw")
+  end
+end
+
 M.config = {
   host = "127.0.0.1",
   port = 5000,
@@ -76,39 +89,51 @@ end
 
 --- Connect and initialize (control/init + key exchange).
 function M.connect(host, port)
+  demo_log("NumscullConnect", "START")
   host = host or M.config.host
   port = port or M.config.port
   local identity = M.config.identity or os.getenv("USER") or "unknown"
   local config_dir = M.config.config_dir
   if not config_dir then
+    demo_log("NumscullConnect", "FAILED: config_dir required")
     return nil, "config_dir required for init (path to identities/)"
   end
   local pcall_ok, result, err = pcall(control.init, host, port, identity, nil, config_dir)
   if not pcall_ok then
+    demo_log("NumscullConnect", "FAILED: " .. tostring(result))
     return nil, tostring(result)
   end
   if not result then
+    demo_log("NumscullConnect", "FAILED: " .. tostring(err))
     return nil, err
   end
   if M.config.project then
     control.change_project(M.config.project)
   end
+  demo_log("NumscullConnect", "END")
   return true
 end
 
 --- Disconnect.
 function M.disconnect()
+  demo_log("NumscullDisconnect", "START")
   control.disconnect()
+  demo_log("NumscullDisconnect", "END")
 end
 
 --- Exit (control/exit + close).
 function M.exit()
+  demo_log("NumscullExit", "START")
   control.exit()
+  demo_log("NumscullExit", "END")
 end
 
 --- Change project.
 function M.change_project(name)
-  return control.change_project(name)
+  demo_log("NumscullProject", "START")
+  local result, err = control.change_project(name)
+  demo_log("NumscullProject", result and "END" or ("FAILED: " .. tostring(err)))
+  return result, err
 end
 
 --- List projects.
@@ -231,45 +256,133 @@ function M.status()
   return table.concat(parts, " ")
 end
 
---- Notes API (re-export).
-M.add = notes.add
-M.add_here = notes.add_here
-M.edit = notes.edit
-M.edit_here = notes.edit_here
-M.edit_open = notes.edit_open
+--- Notes API (re-export with demo logging).
+M.add = function(...)
+  demo_log("NoteAdd", "START")
+  local result = notes.add(...)
+  demo_log("NoteAdd", "END")
+  return result
+end
+
+M.add_here = function(...)
+  demo_log("NoteAddHere", "START")
+  local result = notes.add_here(...)
+  demo_log("NoteAddHere", "END")
+  return result
+end
+
+M.edit = function(...)
+  demo_log("NoteEdit", "START")
+  local result = notes.edit(...)
+  demo_log("NoteEdit", "END")
+  return result
+end
+
+M.edit_here = function(...)
+  demo_log("NoteEditHere", "START")
+  local result = notes.edit_here(...)
+  demo_log("NoteEditHere", "END")
+  return result
+end
+
+M.edit_open = function(...)
+  demo_log("NoteEditOpen", "START")
+  local result = notes.edit_open(...)
+  demo_log("NoteEditOpen", "END")
+  return result
+end
+
 M.edit_float = notes.edit_float
 M.edit_inline = notes.edit_inline
-M.delete = notes.delete
-M.show = notes.show
-M.list = notes.list
+
+M.delete = function(...)
+  demo_log("NoteDelete", "START")
+  local result = notes.delete(...)
+  demo_log("NoteDelete", "END")
+  return result
+end
+
+M.show = function(...)
+  demo_log("NoteShow", "START")
+  local result = notes.show(...)
+  demo_log("NoteShow", "END")
+  return result
+end
+
+M.list = function(...)
+  demo_log("NoteList", "START")
+  local result = notes.list(...)
+  demo_log("NoteList", "END")
+  return result
+end
+
 M.toggle = notes.toggle
 M.for_file = notes.for_file
 M.set = notes.set
 M.remove = notes.remove
-M.search = notes.search
+
+M.search = function(...)
+  demo_log("NoteSearch", "START")
+  local result, err = notes.search(...)
+  demo_log("NoteSearch", result and "END" or ("FAILED: " .. tostring(err)))
+  return result, err
+end
+
 M.search_tags = notes.search_tags
 M.search_columns = notes.search_columns
 M.tag_count = notes.tag_count
 M.search_results = notes.search_results
 
---- Flow API (re-export).
-M.flow_create = flow.create
+--- Flow API (re-export with demo logging).
+M.flow_create = function(...)
+  demo_log("FlowCreate", "START")
+  local result, err = flow.create(...)
+  demo_log("FlowCreate", result and "END" or ("FAILED: " .. tostring(err)))
+  return result, err
+end
+
 M.flow_get_all = flow.get_all
 M.flow_get = flow.get
 M.flow_set = flow.set
 M.flow_set_info = flow.set_info
-M.flow_add_node = flow.add_node
-M.flow_add_node_here = flow.add_node_here
+
+M.flow_add_node = function(...)
+  demo_log("FlowAddNode", "START")
+  local result = flow.add_node(...)
+  demo_log("FlowAddNode", "END")
+  return result
+end
+
+M.flow_add_node_here = function(...)
+  demo_log("FlowAddNodeHere", "START")
+  local result = flow.add_node_here(...)
+  demo_log("FlowAddNodeHere", "END")
+  return result
+end
+
 M.flow_fork_node = flow.fork_node
 M.flow_set_node = flow.set_node
 M.flow_remove_node = flow.remove_node
 M.flow_remove = flow.remove
 M.flow_linked_to = flow.linked_to
 M.flow_unlock = flow.unlock
-M.flow_list = flow.list
+
+M.flow_list = function(...)
+  demo_log("FlowList", "START")
+  local result = flow.list(...)
+  demo_log("FlowList", "END")
+  return result
+end
+
 M.flow_show = flow.show
 M.flow_add_node_at_cursor = flow.add_node_at_cursor
-M.flow_add_node_visual = flow.add_node_visual
+
+M.flow_add_node_visual = function(...)
+  demo_log("FlowAddNode", "START (visual)")
+  local result, err = flow.add_node_visual(...)
+  demo_log("FlowAddNode", result and "END" or ("FAILED: " .. tostring(err)))
+  return result, err
+end
 M.flow_delete = flow.delete
 M.flow_delete_node = flow.delete_node
 M.flow_select = flow.select
