@@ -2,6 +2,38 @@
 
 Persistent, collaborative audit annotations and code flow highlighting for Neovim — rendered inline using extmarks. All data synced via the Numscull protocol.
 
+# Quick quick quickstart
+
+```bash
+mkdir -p ~/.config/nvim/pack/plugins/start/
+ln -s ~/proj/vimscull/ ~/.config/nvim/pack/plugins/start/vimscull
+```
+
+* add to ~/.config/nvim/init.lua :
+
+```lua
+require("numscull").setup({
+  host         = "127.0.0.1", -- Numscull server host
+  port         = 5000,        -- Numscull server port
+  identity     = nil,         -- auto: $USER — must match a keypair in config_dir
+  config_dir   = nil,         -- path containing identities/<name> and users/<name>.pub
+  project      = nil,         -- auto-switch to this project after connect
+  icon         = "📝",        -- prefix icon for rendered notes
+  max_line_len = 120,         -- truncate virtual lines beyond this width
+  auto_connect = false,       -- connect on setup (requires identity + config_dir)
+  auto_fetch   = true,        -- fetch notes for each buffer on BufReadPost
+  quick_connect_auto = false, -- auto-connect from .numscull/config on startup
+  note_template = "",         -- template for new notes
+  mappings = {
+    note_add = "<leader>na",           -- quick add note
+    note_edit = "<leader>ne",          -- quick edit note
+    flow_add_node_here = nil,          -- optional: add flow node at cursor
+    flow_select = nil,                 -- optional: select flow
+  },
+})
+
+```
+
 ## Demo
 
 ![vimscull Demo — Connect, add/edit notes, create flows, add nodes](demo/vimscull-demo.svg)
