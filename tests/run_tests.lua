@@ -644,18 +644,18 @@ do
     assert_eq("extmark 2 row", marks[2][2], 2)  -- line 3 = row 2
   end
 
-  -- Check virt_text detail on first extmark (notes use virt_text at eol)
+  -- Check virt_lines detail on first extmark
   local detail = api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, { details = true })
   if #detail >= 1 then
     local ext_details = detail[1][4]
-    assert_true("extmark has virt_text", ext_details and ext_details.virt_text ~= nil)
-    if ext_details and ext_details.virt_text then
-      local vt = ext_details.virt_text
-      assert_gte("virt_text count >= 1", #vt, 1)
-      -- First chunk should contain header with author and text
-      local header_text = vt[1][1] or ""
-      assert_match("virt_text contains author", header_text, TEST_IDENTITY:gsub("%-", "%%-"))
-      assert_match("virt_text contains note text", header_text, "extmark note line 1")
+    assert_true("extmark has virt_lines", ext_details and ext_details.virt_lines ~= nil)
+    if ext_details and ext_details.virt_lines then
+      local vl = ext_details.virt_lines
+      assert_gte("virt_lines count >= 1", #vl, 1)
+      -- First virt_line should contain header with author and text
+      local header_text = vl[1][1][1] or ""
+      assert_match("virt_line contains author", header_text, TEST_IDENTITY:gsub("%-", "%%-"))
+      assert_match("virt_line contains note text", header_text, "extmark note line 1")
     end
   end
 
@@ -1403,20 +1403,17 @@ do
   local detail = api.nvim_buf_get_extmarks(bufnr, ns_id, 0, -1, { details = true })
   assert_gte("multiline: extmark placed", #detail, 1)
   if #detail >= 1 then
-    local ext = detail[1][4]
-    -- First line of note is in virt_text (eol), rest in virt_lines
-    local vt = ext.virt_text or {}
-    assert_gte("multiline: has virt_text", #vt, 1)
-    assert_match("multiline: virt_text has first line", vt[1][1], "line one")
-
-    local vl = ext.virt_lines or {}
-    -- 2 continuation lines (line two, line three)
-    assert_eq("multiline: 2 virt_lines", #vl, 2)
-    if #vl >= 2 then
-      assert_match("multiline: second virt_line", vl[1][1][1], "line two")
-      assert_match("multiline: third virt_line", vl[2][1][1], "line three")
+    local vl = detail[1][4].virt_lines or {}
+    -- Multi-line note should have 3 virtual lines (header + 2 continuation)
+    assert_eq("multiline: 3 virt_lines", #vl, 3)
+    if #vl >= 3 then
+      -- First line is header with "line one"
+      assert_match("multiline: first virt_line", vl[1][1][1], "line one")
+      -- Continuation lines are dimmed
+      assert_match("multiline: second virt_line", vl[2][1][1], "line two")
+      assert_match("multiline: third virt_line", vl[3][1][1], "line three")
       -- Continuation lines use NumscullDim highlight
-      assert_eq("multiline: continuation hl", vl[1][1][2], "NumscullDim")
+      assert_eq("multiline: continuation hl", vl[2][1][2], "NumscullDim")
     end
   end
 

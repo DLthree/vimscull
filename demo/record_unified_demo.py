@@ -98,9 +98,9 @@ def scene_add_flow_nodes(child):
     """Scene 5: Add nodes to the flow via visual selection.
 
     FlowAddNode uses flow.add_node_visual() which prompts for:
-      1. color  (vim.ui.select)
+      1. color  (vim.ui.select — built-in UI shows numbered list)
       2. note   (vim.ui.input)
-    We must answer both prompts for the node to actually be created.
+    We answer with the item NUMBER, not the name.
     """
     # ── first node: hash_password (line 7) ──
     escape(child)
@@ -111,7 +111,7 @@ def scene_add_flow_nodes(child):
     pause(1)
     slow_send(child, ":FlowAddNode\r", delay=0.05)
     pause(2)
-    slow_send(child, "Red\r", delay=0.05)       # pick color
+    child.send("1\r")                           # 1 = Red
     pause(2)
     slow_send(child, "Weak hashing\r", delay=0.04)  # node note
     pause(2)
@@ -125,7 +125,7 @@ def scene_add_flow_nodes(child):
     pause(1)
     slow_send(child, ":FlowAddNode\r", delay=0.05)
     pause(2)
-    slow_send(child, "Blue\r", delay=0.05)      # pick color
+    child.send("2\r")                           # 2 = Blue
     pause(2)
     slow_send(child, "Timing side-channel\r", delay=0.04)  # node note
     pause(2)
