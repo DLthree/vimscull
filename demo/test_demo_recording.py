@@ -1,183 +1,256 @@
 #!/usr/bin/env python3
-"""
-Test script to verify demo recording without building SVG.
-Checks the .cast file for errors, stalls, and validates it completes properly.
+"""Validate a recorded .cast file without building the SVG.
+
+Checks structure, detects errors/stalls, and verifies that all expected
+Numscull commands appear in the output (via NUMSCULL_DEMO markers).
+
+Two validation sources are used:
+  1. The .cast file itself (terminal output captured by asciinema)
+  2. The demo.log file written by NUMSCULL_DEMO logging (more reliable)
+
+Exit code 0 = pass, 1 = issues found.
 """
 
 import json
 import sys
 from pathlib import Path
 
-DEMO_DIR = Path(__file__).resolve().parent
-CAST_FILE = DEMO_DIR / "vimscull-demo.cast"
+from demo_utils import CAST_FILE, DEMO_DIR
+
+# Commands the demo is expected to exercise.
+EXPECTED_COMMANDS = [
+    "NumscullConnect",
+    "NumscullProject",
+    "NoteAdd",
+    "NoteList",
+    "FlowCreate",
+    "FlowAddNode",
+    "FlowList",
+]
+
+# Strings that prove the relevant feature appeared in the terminal output.
+CONTENT_CHECKS = {
+    "Notes": ["argon2", "pbkdf2", "#security"],
+    "Flows": ["Security", "Audit"],
+    "Commands": [":Flow", "FlowCreate"],
+}
+
+# Thresholds
+MAX_GAP_SECONDS = 10   # flag gaps longer than this
+HANG_THRESHOLD = 60    # gaps this long likely indicate a hang
 
 
-def check_cast_file():
-    """Check the cast file for issues."""
-    if not CAST_FILE.exists():
-        print(f"❌ Cast file not found: {CAST_FILE}")
-        return False
-    
-    print(f"✓ Cast file found: {CAST_FILE}")
-    print(f"  Size: {CAST_FILE.stat().st_size / 1024:.1f} KB")
-    
-    # Read and parse cast file
-    with open(CAST_FILE) as f:
-        lines = f.readlines()
-    
+# ── helpers ──────────────────────────────────────────────────────
+
+
+def _collect_output(lines):
+    """Parse .cast events.  Returns (full_output_str, duration, gap_list)."""
+    parts = []
+    last_ts = 0.0
+    max_ts = 0.0
+    gaps = []  # (line_number, gap_seconds)
+
+    for lineno, raw in enumerate(lines[1:], start=2):
+        try:
+            ts, event_type, data = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            continue
+
+        max_ts = max(max_ts, ts)
+        gap = ts - last_ts
+        if gap > MAX_GAP_SECONDS:
+            gaps.append((lineno, gap))
+        last_ts = ts
+
+        if event_type == "o":
+            parts.append(data)
+
+    return "".join(parts), max_ts, gaps
+
+
+def _find_demo_log():
+    """Try to locate the demo.log produced during recording."""
+    # The log lives inside the temp config dir.  The recording script
+    # prints the config_dir, but we don't have it here.  Scan /tmp for
+    # the most recent numscull-demo-*/demo.log.
+    import glob
+
+    candidates = sorted(
+        glob.glob("/tmp/numscull-demo-*/demo.log"),
+        key=lambda p: Path(p).stat().st_mtime,
+        reverse=True,
+    )
+    return Path(candidates[0]) if candidates else None
+
+
+# ── checks ───────────────────────────────────────────────────────
+
+
+def check_cast_structure(lines):
+    """Validate basic .cast structure.  Returns (header, ok)."""
     if len(lines) < 2:
-        print("❌ Cast file is too short")
-        return False
-    
-    # Parse header
+        print("FAIL  cast file too short")
+        return None, False
     header = json.loads(lines[0])
-    print(f"  Duration: {header.get('duration', 'unknown')} seconds")
-    print(f"  Terminal: {header.get('width', '?')}x{header.get('height', '?')}")
-    
-    # Check for issues in the output
-    errors = []
-    timeouts = []
-    floats = []
-    last_timestamp = 0
-    max_timestamp = 0
-    
-    for i, line in enumerate(lines[1:], start=2):
+    print(f"file     {CAST_FILE.name}  ({CAST_FILE.stat().st_size / 1024:.1f} KB)")
+    print(f"term     {header.get('width', '?')}x{header.get('height', '?')}")
+    return header, True
+
+
+def check_errors(lines):
+    """Scan terminal output for error / timeout strings."""
+    hits = []
+    for lineno, raw in enumerate(lines[1:], start=2):
         try:
-            timestamp, event_type, data = json.loads(line)
-            max_timestamp = max(max_timestamp, timestamp)
-            
-            # Check for long gaps (stalls) - but ignore gaps in the last 10% of recording
-            if timestamp < max_timestamp * 0.9 and timestamp - last_timestamp > 10:
-                timeouts.append(f"Line {i}: {timestamp - last_timestamp:.1f}s gap")
-            last_timestamp = timestamp
-            
-            if event_type == "o":  # output event
-                # Check for error messages
-                if "error" in data.lower() or "fail" in data.lower():
-                    errors.append(f"Line {i}: {data[:80]}")
-                
-                # Check for timeout messages
-                if "timeout" in data.lower():
-                    timeouts.append(f"Line {i}: timeout detected")
-                
-                # Check for floating window prompts
-                if "Note (use" in data or "Edit Note (inline)" in data:
-                    floats.append(f"Line {i}: floating prompt detected")
-        except json.JSONDecodeError:
-            print(f"⚠️  Warning: Could not parse line {i}")
-    
-    # Report findings
-    print(f"\n📊 Analysis:")
-    print(f"  Total events: {len(lines) - 1}")
-    print(f"  Duration: {last_timestamp:.1f}s")
-    
-    issues_found = False
-    
-    if errors:
-        print(f"\n❌ Errors found ({len(errors)}):")
-        for error in errors[:5]:  # Show first 5
-            print(f"  {error}")
-        issues_found = True
-    else:
-        print(f"\n✓ No errors found")
-    
-    if timeouts:
-        print(f"\n❌ Timeouts/stalls found ({len(timeouts)}):")
-        for timeout in timeouts[:5]:
-            print(f"  {timeout}")
-        issues_found = True
-    else:
-        print(f"✓ No timeouts/stalls found")
-    
-    if floats:
-        print(f"\n❌ Floating prompts found ({len(floats)}):")
-        for float_msg in floats[:5]:
-            print(f"  {float_msg}")
-        issues_found = True
-    else:
-        print(f"✓ No floating prompts found")
-    
-    # Check for expected content/commands (use looser matching)
-    full_output = ""
-    for line in lines[1:]:
-        try:
-            _, event_type, data = json.loads(line)
-            if event_type == "o":
-                full_output += data
-        except:
-            pass
-    
-    print(f"\n📝 Content verification:")
-    # Check for key indicators
-    indicators = {
-        "Notes": "Consider using argon2" in full_output or "pbkdf2" in full_output or "#security" in full_output,
-        "Flows": "Security" in full_output or "Audit" in full_output,
-        "Commands": ":Flow" in full_output or "FlowCreate" in full_output,
-    }
-    
-    for key, found in indicators.items():
-        if found:
-            print(f"  ✓ {key} content found")
-        else:
-            print(f"  ❌ {key} content NOT FOUND")
-            issues_found = True
-    
-    # Check for demo logging output (NUMSCULL_DEMO markers)
-    demo_functions = [
-        "NumscullConnect",
-        "NumscullProject", 
-        "NoteAdd",
-        "NoteList",
-        "FlowCreate",
-        "FlowAddNode",
-        "FlowList",
-    ]
-    
-    print(f"\n🔍 Function call verification (NUMSCULL_DEMO logging):")
-    for func in demo_functions:
-        start_marker = f"[NUMSCULL_DEMO] {func}: START"
-        end_marker = f"[NUMSCULL_DEMO] {func}: END"
-        
-        if start_marker in full_output:
-            if end_marker in full_output:
-                print(f"  ✓ {func} called and completed (START/END found)")
-            else:
-                # Some functions (like List, Show) don't return immediately because they open buffers
-                print(f"  ✓ {func} called (START found, END may be deferred for UI functions)")
-        else:
-            print(f"  ❌ {func} NOT CALLED (no START marker)")
-            issues_found = True
-    
-    # Note: Connection info may not be visible if it succeeds silently
-    if "127.0.0.1" in full_output or "5222" in full_output:
-        print(f"\n  ✓ Connection info found")
-    else:
-        print(f"\n  ℹ️  Connection info not visible (check NUMSCULL_DEMO logging above)")
-    
-    # Check for long gaps (>60s indicates potential hang)
-    long_gaps = []
-    for t in timeouts:
-        if "gap" in t:
-            try:
-                gap_str = t.split("gap")[1].split("s")[0].strip()
-                if gap_str and float(gap_str) > 60:
-                    long_gaps.append(t)
-            except (ValueError, IndexError):
-                pass
-    
-    if long_gaps:
-        print(f"\n⚠️  Warning: Very long gaps detected (>60s):")
-        for gap in long_gaps[:3]:
-            print(f"  {gap}")
-    
-    if issues_found:
-        print(f"\n❌ Demo has issues - see above")
+            _, etype, data = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if etype != "o":
+            continue
+        low = data.lower()
+        if "error" in low or "fail" in low or "timeout" in low:
+            hits.append((lineno, data.rstrip()[:80]))
+    return hits
+
+
+def check_gaps(gaps, duration):
+    """Classify gaps into pauses and potential hangs."""
+    # Ignore gaps in the final 10 % (shutdown can be slow).
+    early = [(ln, g) for ln, g in gaps if g < duration * 0.9]
+    hangs = [(ln, g) for ln, g in early if g >= HANG_THRESHOLD]
+    pauses = [(ln, g) for ln, g in early if g < HANG_THRESHOLD]
+    return hangs, pauses
+
+
+def check_content(full_output):
+    """Verify that expected feature strings appear in the output."""
+    missing = {}
+    for label, needles in CONTENT_CHECKS.items():
+        if not any(n in full_output for n in needles):
+            missing[label] = needles
+    return missing
+
+
+def check_markers_in_output(full_output):
+    """Check for NUMSCULL_DEMO START/END markers in .cast output."""
+    results = {}  # cmd -> (has_start, has_end)
+    for cmd in EXPECTED_COMMANDS:
+        start = f"[NUMSCULL_DEMO] {cmd}: START" in full_output
+        end = f"[NUMSCULL_DEMO] {cmd}: END" in full_output
+        results[cmd] = (start, end)
+    return results
+
+
+def check_markers_in_log(log_path):
+    """Check for NUMSCULL_DEMO START/END markers in the demo.log file."""
+    if not log_path or not log_path.exists():
+        return None
+    text = log_path.read_text()
+    results = {}
+    for cmd in EXPECTED_COMMANDS:
+        start = f"[NUMSCULL_DEMO] {cmd}: START" in text
+        end = f"[NUMSCULL_DEMO] {cmd}: END" in text
+        results[cmd] = (start, end)
+    return results
+
+
+def check_floating_prompts(full_output):
+    """Detect unwanted floating-window prompts that leaked into recording."""
+    bad = []
+    if "Note (use" in full_output:
+        bad.append("Note (use \\n ...) prompt leaked")
+    if "Edit Note (inline)" in full_output:
+        bad.append("Edit Note (inline) prompt leaked")
+    return bad
+
+
+# ── main ─────────────────────────────────────────────────────────
+
+
+def main():
+    if not CAST_FILE.exists():
+        print(f"FAIL  cast file not found: {CAST_FILE}")
         return False
+
+    lines = CAST_FILE.read_text().splitlines()
+    header, ok = check_cast_structure(lines)
+    if not ok:
+        return False
+
+    full_output, duration, gaps = _collect_output(lines)
+    event_count = len(lines) - 1
+    print(f"events   {event_count}")
+    print(f"duration {duration:.1f}s")
+
+    issues = False
+
+    # ── errors ───────────────────────────────────────────────────
+    errors = check_errors(lines)
+    if errors:
+        print(f"\n[WARN] error strings ({len(errors)}):")
+        for ln, snip in errors[:5]:
+            print(f"  line {ln}: {snip}")
+        issues = True
     else:
-        print(f"\n✅ Demo looks good!")
-        return True
+        print("\nerrors   none")
+
+    # ── floating prompts ─────────────────────────────────────────
+    prompts = check_floating_prompts(full_output)
+    if prompts:
+        for p in prompts:
+            print(f"[FAIL] {p}")
+        issues = True
+
+    # ── gaps / hangs ─────────────────────────────────────────────
+    hangs, pauses = check_gaps(gaps, duration)
+    if hangs:
+        print(f"\n[FAIL] possible hangs (>{HANG_THRESHOLD}s):")
+        for ln, g in hangs[:3]:
+            print(f"  line {ln}: {g:.1f}s")
+        issues = True
+    if pauses:
+        print(f"pauses   {len(pauses)} (>{MAX_GAP_SECONDS}s, likely ok)")
+
+    # ── content ──────────────────────────────────────────────────
+    missing = check_content(full_output)
+    print("\ncontent:")
+    for label in CONTENT_CHECKS:
+        status = "MISSING" if label in missing else "ok"
+        print(f"  {label:10s} {status}")
+    if missing:
+        issues = True
+
+    # ── NUMSCULL_DEMO markers ────────────────────────────────────
+    cast_markers = check_markers_in_output(full_output)
+    log_path = _find_demo_log()
+    log_markers = check_markers_in_log(log_path)
+
+    print(f"\nfunction calls (NUMSCULL_DEMO):")
+    if log_path:
+        print(f"  log file: {log_path}")
+    source_label = "log" if log_markers else "cast"
+    markers = log_markers or cast_markers
+
+    for cmd in EXPECTED_COMMANDS:
+        has_start, has_end = markers.get(cmd, (False, False))
+        if has_start and has_end:
+            status = "ok"
+        elif has_start:
+            # UI-opening commands may not emit END until the buffer closes.
+            status = "ok (START only)"
+        else:
+            status = "MISSING"
+            issues = True
+        print(f"  {cmd:22s} {status}  [{source_label}]")
+
+    # ── verdict ──────────────────────────────────────────────────
+    print()
+    if issues:
+        print("RESULT  issues found")
+    else:
+        print("RESULT  ok")
+    return not issues
 
 
 if __name__ == "__main__":
-    success = check_cast_file()
-    sys.exit(0 if success else 1)
+    sys.exit(0 if main() else 1)

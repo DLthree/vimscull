@@ -87,34 +87,41 @@ local function normalize_note(note)
   }
 end
 
-local function build_virt_lines(note)
+--- Build the inline annotation chunks for a note.
+--- Returns (eol_chunks, overflow_virt_lines):
+---   eol_chunks:  {{text, hl}, ...} placed at end-of-line via virt_text
+---   overflow:    additional virt_lines for multi-line notes (may be empty)
+local function build_note_display(note)
   local max, icon = M.config.max_line_len, M.config.icon
-  local lines = {}
   local text_lines = vim.split(note.text, "\n", { plain = true })
   local date = (note.modifiedDate or note.createdDate or ""):sub(1, 10)
-  local header = string.format("%s [%s @ %s] ", icon, note.author or "?", date)
-  
-  -- Get window width for right alignment
-  local win_width = vim.o.columns
-  local note_width = fn.strdisplaywidth(header .. (text_lines[1] or ""))
-  local padding = win_width > note_width and string.rep(" ", win_width - note_width - 2) or ""
-  
-  lines[1] = { { padding .. truncate(header .. (text_lines[1] or ""), max), "NumscullHeader" } }
+  local header = string.format("  %s [%s @ %s] ", icon, note.author or "?", date)
+
+  -- First line: shown at end-of-line via virt_text
+  local first = truncate(header .. (text_lines[1] or ""), max)
+  local eol_chunks = { { first, "NumscullHeader" } }
+
+  -- Continuation lines: shown as virt_lines below
+  local overflow = {}
   local indent = string.rep(" ", fn.strdisplaywidth(icon) + 1)
   for i = 2, #text_lines do
-    local line_text = indent .. text_lines[i]
-    local line_width = fn.strdisplaywidth(line_text)
-    local line_padding = win_width > line_width and string.rep(" ", win_width - line_width - 2) or ""
-    lines[#lines + 1] = { { line_padding .. truncate(line_text, max), "NumscullDim" } }
+    overflow[#overflow + 1] = { { truncate(indent .. text_lines[i], max), "NumscullDim" } }
   end
-  return lines
+
+  return eol_chunks, overflow
 end
 
 local function place_extmark(bufnr, note, row)
-  note._extmark_id = api.nvim_buf_set_extmark(bufnr, ns, row, 0, {
-    virt_lines = build_virt_lines(note),
-    virt_lines_above = false,
-  })
+  local eol_chunks, overflow = build_note_display(note)
+  local opts = {
+    virt_text = eol_chunks,
+    virt_text_pos = "eol",
+  }
+  if #overflow > 0 then
+    opts.virt_lines = overflow
+    opts.virt_lines_above = false
+  end
+  note._extmark_id = api.nvim_buf_set_extmark(bufnr, ns, row, 0, opts)
 end
 
 local function clear_extmarks(bufnr)
