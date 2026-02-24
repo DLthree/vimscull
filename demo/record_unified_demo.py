@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""
-Record a unified vimscull demo showing all features:
-- Connect to server
-- Add and edit notes (with float editor)
-- Add flows and nodes
-- List flows
+"""Record a unified vimscull demo showing all features.
 
-This replaces the separate notes, search, and flow tutorials.
+Demonstrates: connect, add notes, list notes, create flow,
+add flow nodes (visual selection), show flow, list flows, disconnect.
+
+Replaces the old separate notes/search/flow tutorials.
 """
 
 import os
@@ -17,23 +15,27 @@ from pathlib import Path
 
 import pexpect
 
-DEMO_DIR = Path(__file__).resolve().parent
-REPO_ROOT = DEMO_DIR.parent
-CAST_FILE = DEMO_DIR / "vimscull-demo.cast"
-INIT_FILE = DEMO_DIR / "init_demo.lua"
-SETUP_SCRIPT = DEMO_DIR / "setup_demo_server.py"
-PRE_SETUP_SCRIPT = DEMO_DIR / "pre_setup_plugins.py"
-PORT = 5222
+from demo_utils import (
+    CAST_FILE,
+    DEFAULT_PORT,
+    INIT_FILE,
+    PRE_SETUP_SCRIPT,
+    REPO_ROOT,
+    SETUP_SCRIPT,
+    find_python,
+)
+
+PORT = DEFAULT_PORT
+
+
+# ── pexpect helpers ──────────────────────────────────────────────
 
 
 def slow_send(child, text, delay=0.06):
+    """Type text character-by-character so the screencast looks natural."""
     for ch in text:
         child.send(ch)
         time.sleep(delay)
-
-
-def enter(child):
-    child.send("\r")
 
 
 def escape(child):
@@ -44,22 +46,135 @@ def pause(secs=2):
     time.sleep(secs)
 
 
-def find_python():
-    venv = REPO_ROOT / ".venv" / "bin" / "python3"
-    if venv.exists():
-        return str(venv)
-    return "python3"
+# ── scenes ───────────────────────────────────────────────────────
+
+
+def scene_connect(child):
+    """Scene 1: Connect to the Numscull server and select a project."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, f":NumscullConnect 127.0.0.1 {PORT}\r", delay=0.05)
+    pause(3)
+    slow_send(child, ":NumscullProject demo-project\r", delay=0.05)
+    pause(2)
+
+
+def scene_add_notes(child):
+    """Scene 2: Add annotations on two different lines."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":10\r", delay=0.10)
+    pause(1.5)
+    slow_send(child, ":NoteAdd Consider using argon2 instead of pbkdf2 #security\r", delay=0.04)
+    pause(3)
+
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":22\r", delay=0.10)
+    pause(1.5)
+    slow_send(child, ":NoteAdd Check return value for edge cases #bug\r", delay=0.04)
+    pause(3)
+
+
+def scene_list_notes(child):
+    """Scene 3: Show the note listing buffer."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":NoteList\r", delay=0.05)
+    pause(3)
+    slow_send(child, ":q\r", delay=0.06)
+    pause(1)
+
+
+def scene_create_flow(child):
+    """Scene 4: Create a new audit flow."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":FlowCreate Security Audit\r", delay=0.05)
+    pause(2)
+
+
+def scene_add_flow_nodes(child):
+    """Scene 5: Add nodes to the flow via visual selection.
+
+    FlowAddNode uses flow.add_node_visual() which prompts for:
+      1. color  (vim.ui.select — built-in UI shows numbered list)
+      2. note   (vim.ui.input)
+    We answer with the item NUMBER, not the name.
+    """
+    # ── first node: hash_password (line 7) ──
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":7\r", delay=0.10)
+    pause(1)
+    slow_send(child, "wviw", delay=0.10)       # visual-select word
+    pause(1)
+    slow_send(child, ":FlowAddNode\r", delay=0.05)
+    pause(2)
+    child.send("1\r")                           # 1 = Red
+    pause(2)
+    slow_send(child, "Weak hashing\r", delay=0.04)  # node note
+    pause(2)
+
+    # ── second node: verify_password (line 14) ──
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":14\r", delay=0.10)
+    pause(1)
+    slow_send(child, "wviw", delay=0.10)
+    pause(1)
+    slow_send(child, ":FlowAddNode\r", delay=0.05)
+    pause(2)
+    child.send("2\r")                           # 2 = Blue
+    pause(2)
+    slow_send(child, "Timing side-channel\r", delay=0.04)  # node note
+    pause(2)
+
+
+def scene_show_flow(child):
+    """Scene 6: Show the flow detail view with nodes."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":FlowShow\r", delay=0.05)
+    pause(3)
+    slow_send(child, ":q\r", delay=0.06)
+    pause(1)
+
+
+def scene_list_flows(child):
+    """Scene 7: Show the flow listing buffer."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":FlowList\r", delay=0.05)
+    pause(3)
+    slow_send(child, ":q\r", delay=0.06)
+    pause(1)
+
+
+def scene_disconnect(child):
+    """Scene 8: Disconnect and quit Neovim."""
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":NumscullDisconnect\r", delay=0.05)
+    pause(2)
+    escape(child)
+    pause(0.5)
+    slow_send(child, ":q!\r", delay=0.06)
+    pause(2)
+
+
+# ── main ─────────────────────────────────────────────────────────
 
 
 def main():
     python = find_python()
-    
-    # Pre-install plugins
+
+    # 1. Pre-install plugins
     print("Step 1: Pre-installing Neovim plugins...")
     subprocess.run([python, str(PRE_SETUP_SCRIPT)], check=True)
-    print("✓ Plugins installed\n")
-    
-    # Start mock server with pre-created project
+    print("Done\n")
+
+    # 2. Start mock server with a pre-created project
     print("Step 2: Starting mock server...")
     server_proc = subprocess.Popen(
         [python, str(SETUP_SCRIPT), "--port", str(PORT), "--project", "demo-project"],
@@ -71,19 +186,20 @@ def main():
         print("ERROR: failed to start mock server", file=sys.stderr)
         server_proc.kill()
         sys.exit(1)
-    print(f"✓ Mock server started, config_dir={config_dir}\n")
-    
+    print(f"Mock server ready (config_dir={config_dir})\n")
+
     try:
         os.environ["TERM"] = "xterm-256color"
         os.environ["USER"] = "demo-reviewer"
         os.environ["NUMSCULL_CONFIG_DIR"] = config_dir
         os.environ["NUMSCULL_PORT"] = str(PORT)
-        
+
+        # 3. Record the demo
         print("Step 3: Recording demo...")
-        
-        # Launch nvim with asciinema
-        launch_cmd = f"cd {REPO_ROOT} && nvim -u {INIT_FILE} {REPO_ROOT}/demo/example.py"
-        
+        launch_cmd = (
+            f"cd {REPO_ROOT} && nvim -u {INIT_FILE} {REPO_ROOT}/demo/example.py"
+        )
+
         child = pexpect.spawn(
             "asciinema",
             ["rec", "--overwrite", "-c", launch_cmd, str(CAST_FILE)],
@@ -91,105 +207,29 @@ def main():
             dimensions=(35, 100),
             timeout=180,
         )
-        
-        # Wait for nvim to fully load (plugins already installed)
+
+        # Wait for nvim to fully load
         pause(3)
-        
-        # === SCENE 1: Connect to server ===
-        escape(child)
-        pause(0.5)
-        
-        slow_send(child, f":NumscullConnect 127.0.0.1 {PORT}\r", delay=0.05)
-        pause(3)
-        
-        slow_send(child, ":NumscullProject demo-project\r", delay=0.05)
-        pause(2)
-        
-        # === SCENE 2: Add notes ===
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":10\r", delay=0.10)  # Go to line 10
-        pause(1.5)
-        
-        # Add first note with text as argument (no prompt)
-        slow_send(child, ":NoteAdd Consider using argon2 instead of pbkdf2 #security\r", delay=0.04)
-        pause(3)
-        
-        # Add second note on another line
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":22\r", delay=0.10)  # Go to line 22
-        pause(1.5)
-        slow_send(child, ":NoteAdd Check return value for edge cases #bug\r", delay=0.04)
-        pause(3)
-        
-        # === SCENE 3: List notes ===
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":NoteList\r", delay=0.05)
-        pause(3)
-        
-        slow_send(child, ":q\r", delay=0.06)
-        pause(1)
-        
-        # === SCENE 4: Create a flow ===
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":FlowCreate Security Audit\r", delay=0.05)
-        pause(2)
-        
-        # === SCENE 5: Add nodes to flow with visual selection ===
-        # Select hash_password function name
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":7\r", delay=0.10)  # Go to line 7
-        pause(1)
-        slow_send(child, "wviw", delay=0.10)  # Select word
-        pause(1)
-        slow_send(child, ":FlowAddNode\r", delay=0.05)
-        pause(2)
-        
-        # Select color
-        slow_send(child, "Red\r", delay=0.05)
-        pause(2)
-        
-        # Add another node
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":14\r", delay=0.10)  # Line 14
-        pause(1)
-        slow_send(child, "wviw", delay=0.10)
-        pause(1)
-        slow_send(child, ":FlowAddNode\r", delay=0.05)
-        pause(2)
-        slow_send(child, "Blue\r", delay=0.05)
-        pause(2)
-        
-        # === SCENE 6: List flows ===
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":FlowList\r", delay=0.05)
-        pause(3)
-        
-        slow_send(child, ":q\r", delay=0.06)
-        pause(1)
-        
-        # === SCENE 8: Disconnect and quit ===
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":NumscullDisconnect\r", delay=0.05)
-        pause(2)
-        
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":q!\r", delay=0.06)
-        pause(2)
-        
+
+        scene_connect(child)
+        scene_add_notes(child)
+        scene_list_notes(child)
+        scene_create_flow(child)
+        scene_add_flow_nodes(child)
+        scene_show_flow(child)
+        scene_list_flows(child)
+        scene_disconnect(child)
+
         child.expect(pexpect.EOF, timeout=15)
         child.close()
-        
-        print(f"\n✓ Recording saved to: {CAST_FILE}")
-        
+
+        # 4. Report log file location for debugging
+        log_file = Path(config_dir) / "demo.log"
+        if log_file.exists():
+            print(f"\nDemo log: {log_file}")
+
+        print(f"Recording saved to: {CAST_FILE}")
+
     finally:
         server_proc.terminate()
         try:

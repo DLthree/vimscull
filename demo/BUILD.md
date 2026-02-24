@@ -3,68 +3,58 @@
 ### Dependencies
 
 ```bash
-# System dependencies
 sudo apt-get install -y neovim libsodium-dev
-
-# Python dependencies
 pip install asciinema pexpect pynacl
-
-# Node.js dependency for SVG conversion
-npm install -g svg-term-cli
+npm install -g svg-term-cli        # for SVG conversion
 ```
 
-**Note**: libsodium-dev is required for the NaCl encryption used by vimscull. Without it, crypto operations will fail.
-
----
-
-## Unified demo (all features)
-
-Demonstrates: `:NumscullConnect`, `:NumscullProject`, `:NoteAdd`, `:NoteEdit` (inline editor),
-`:NoteList`, `:FlowCreate`, `:FlowAddNode`, `:FlowList`, `:NumscullDisconnect`.
-
-### Recording
+### Quick start (Makefile)
 
 ```bash
-# Pre-install plugins (run once, or when plugins change)
-# This also checks for required dependencies
-python3 demo/pre_setup_plugins.py
-
-# Record the demo
-python3 demo/record_unified_demo.py
+cd demo/
+make all        # deps → record → validate → svg
 ```
 
-The script:
-1. Pre-installs Neovim plugins (lazy.nvim, lualine, dressing.nvim)
-2. Checks for required system dependencies (libsodium-dev, pynacl, neovim, asciinema)
-3. Starts a mock Numscull server
-4. Records a complete workflow showing all features
-5. Shuts down the server
+Individual targets:
 
-### Converting to animated SVG
+| Target       | What it does                                              |
+|--------------|-----------------------------------------------------------|
+| `make deps`     | Check system deps, pre-install Neovim plugins          |
+| `make record`   | Record the asciinema screencast                        |
+| `make validate` | Verify the .cast file (errors, stalls, missing features) |
+| `make svg`      | Convert .cast → animated SVG (needs svg-term-cli)      |
+| `make clean`    | Remove generated .cast and .svg                        |
+| `make help`     | Show all targets                                       |
 
-```bash
-svg-term \
-  --in  demo/vimscull-demo.cast \
-  --out demo/vimscull-demo.svg \
-  --window --no-cursor --padding 10
+### File overview
+
+```
+demo/
+  demo_utils.py            shared constants, find_python()
+  pre_setup_plugins.py     dependency check + plugin pre-install
+  setup_demo_server.py     start mock server, pre-create projects
+  record_unified_demo.py   pexpect-driven asciinema recording
+  test_demo_recording.py   .cast + demo.log validation
+  init_demo.lua            Neovim config for demo recording
+  example.py               sample file shown in the demo
+  Makefile                 single entry point
+  BUILD.md                 this file
 ```
 
----
+### How validation works
 
-## Testing the demo config
+Two complementary sources:
 
-Before recording, test that vimscull works with the demo config:
+1. **`.cast` file** — The asciinema recording captures all terminal output including
+   `[NUMSCULL_DEMO]` markers emitted by `demo_log()` in `lua/numscull/init.lua`.
+2. **`demo.log`** — When `NUMSCULL_DEMO=1` and `NUMSCULL_CONFIG_DIR` is set, each
+   logged call also appends to `$NUMSCULL_CONFIG_DIR/demo.log`. This is more reliable
+   than scraping terminal escape sequences.
 
-```bash
-python3 demo/test_demo_config.py
-```
+`test_demo_recording.py` checks both sources and reports which commands were called.
 
----
-
-## Embedding in README
+### Embedding in README
 
 ```markdown
-## Demo
-
-![vimscull Demo — Connect, add/edit notes with float editor, create flows, add nodes](demo/vimscull-demo.svg)
+![vimscull Demo](demo/vimscull-demo.svg)
 ```

@@ -93,19 +93,11 @@ local function build_virt_lines(note)
   local text_lines = vim.split(note.text, "\n", { plain = true })
   local date = (note.modifiedDate or note.createdDate or ""):sub(1, 10)
   local header = string.format("%s [%s @ %s] ", icon, note.author or "?", date)
-  
-  -- Get window width for right alignment
-  local win_width = vim.o.columns
-  local note_width = fn.strdisplaywidth(header .. (text_lines[1] or ""))
-  local padding = win_width > note_width and string.rep(" ", win_width - note_width - 2) or ""
-  
-  lines[1] = { { padding .. truncate(header .. (text_lines[1] or ""), max), "NumscullHeader" } }
+
+  lines[1] = { { truncate(header .. (text_lines[1] or ""), max), "NumscullHeader" } }
   local indent = string.rep(" ", fn.strdisplaywidth(icon) + 1)
   for i = 2, #text_lines do
-    local line_text = indent .. text_lines[i]
-    local line_width = fn.strdisplaywidth(line_text)
-    local line_padding = win_width > line_width and string.rep(" ", win_width - line_width - 2) or ""
-    lines[#lines + 1] = { { line_padding .. truncate(line_text, max), "NumscullDim" } }
+    lines[#lines + 1] = { { truncate(indent .. text_lines[i], max), "NumscullDim" } }
   end
   return lines
 end

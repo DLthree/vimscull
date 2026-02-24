@@ -10,7 +10,6 @@ vim.env.NUMSCULL_DEMO = "1"
 vim.g.mapleader = " "
 
 vim.o.number = true
-vim.o.relativenumber = true
 vim.o.mouse = "a"
 
 vim.o.expandtab = true

@@ -17,26 +17,22 @@ import struct
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 from nacl.bindings import crypto_box, crypto_box_open, crypto_scalarmult_base
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MOCK_SERVER = REPO_ROOT / "tests" / "mock_server.py"
-IDENTITY = "demo-reviewer"
-HEADER_SIZE = 10
-BLOCK_SIZE = 512
-NONCE_LEN = 24
-KEY_LEN = 32
-ENCRYPTED_BLOCK_SIZE = BLOCK_SIZE + 16  # TAG_LEN = 16
-
-
-def find_python():
-    venv = REPO_ROOT / ".venv" / "bin" / "python3"
-    if venv.exists():
-        return str(venv)
-    return "python3"
+from demo_utils import (
+    BLOCK_SIZE,
+    DEFAULT_PORT,
+    ENCRYPTED_BLOCK_SIZE,
+    HEADER_SIZE,
+    IDENTITY,
+    KEY_LEN,
+    MOCK_SERVER,
+    NONCE_LEN,
+    REPO_ROOT,
+    find_python,
+)
 
 
 def generate_keypair(config_dir: Path):
@@ -55,8 +51,11 @@ def generate_keypair(config_dir: Path):
 
 
 def wait_for_port(port, timeout=5):
-    start = time.time()
-    while time.time() - start < timeout:
+    """Block until a TCP connection to localhost:port succeeds."""
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         try:
             s = socket.create_connection(("127.0.0.1", port), timeout=0.5)
             s.close()
@@ -67,6 +66,7 @@ def wait_for_port(port, timeout=5):
 
 
 def read_exact(sock, n):
+    """Read exactly *n* bytes from *sock*, raising EOFError on disconnect."""
     chunks, received = [], 0
     while received < n:
         chunk = sock.recv(min(n - received, 4096))
@@ -87,9 +87,12 @@ def precreate_projects(host, port, client_pk, client_sk, projects):
 
     sock = socket.create_connection((host, port), timeout=5)
 
-    # control/init (plaintext)
-    init_req = json.dumps({"id": 1, "method": "control/init",
-                           "params": {"identity": IDENTITY, "version": "0.2.4"}}).encode()
+    # ── plaintext handshake ──────────────────────────────────────
+    init_req = json.dumps({
+        "id": 1,
+        "method": "control/init",
+        "params": {"identity": IDENTITY, "version": "0.2.4"},
+    }).encode()
     sock.sendall(f"{len(init_req):0>{HEADER_SIZE}}".encode() + init_req)
 
     resp_header = read_exact(sock, HEADER_SIZE)
@@ -98,30 +101,28 @@ def precreate_projects(host, port, client_pk, client_sk, projects):
     server_pk_b64 = resp_body.get("params", {}).get("publicKey", {}).get("bytes", "")
     server_pk = base64.b64decode(server_pk_b64)[:32]
 
-    # Key exchange: read server ephemeral keys
+    # ── key exchange ─────────────────────────────────────────────
     server_exchange = read_exact(sock, NONCE_LEN + ENCRYPTED_BLOCK_SIZE)
     server_nonce = server_exchange[:NONCE_LEN]
     server_ct = server_exchange[NONCE_LEN:]
     server_block = crypto_box_open(server_ct, server_nonce, server_pk, client_sk)
     server_recv_pk = server_block[:KEY_LEN]
-    server_send_pk = server_block[KEY_LEN:KEY_LEN * 2]
+    server_send_pk = server_block[KEY_LEN : KEY_LEN * 2]
 
-    # Generate our ephemeral keys
     our_recv_sk = os.urandom(32)
     our_recv_pk = crypto_scalarmult_base(our_recv_sk)
     our_send_sk = os.urandom(32)
     our_send_pk = crypto_scalarmult_base(our_send_sk)
 
-    # Send our ephemeral keys encrypted
     block = bytearray(BLOCK_SIZE)
     block[:KEY_LEN] = our_recv_pk
-    block[KEY_LEN:KEY_LEN * 2] = our_send_pk
-    block[KEY_LEN * 2:] = os.urandom(BLOCK_SIZE - KEY_LEN * 2)
+    block[KEY_LEN : KEY_LEN * 2] = our_send_pk
+    block[KEY_LEN * 2 :] = os.urandom(BLOCK_SIZE - KEY_LEN * 2)
     client_nonce = os.urandom(NONCE_LEN)
     client_ct = crypto_box(bytes(block), client_nonce, server_pk, client_sk)
     sock.sendall(client_nonce + client_ct)
 
-    # Now we have an encrypted channel
+    # ── encrypted channel ────────────────────────────────────────
     send_counter = 1
     recv_counter = 1
     msg_id = 2
@@ -130,16 +131,15 @@ def precreate_projects(host, port, client_pk, client_sk, projects):
         nonlocal send_counter
         json_bytes = json.dumps(message).encode()
         framed = f"{len(json_bytes):0>{HEADER_SIZE}}".encode() + json_bytes
-        block = bytearray(BLOCK_SIZE)
-        struct.pack_into("<H", block, 0, len(framed))
-        block[2:2 + len(framed)] = framed
+        blk = bytearray(BLOCK_SIZE)
+        struct.pack_into("<H", blk, 0, len(framed))
+        blk[2 : 2 + len(framed)] = framed
         remaining = BLOCK_SIZE - 2 - len(framed)
         if remaining > 0:
-            block[2 + len(framed):] = os.urandom(remaining)
+            blk[2 + len(framed) :] = os.urandom(remaining)
         nonce = counter_nonce(send_counter)
         send_counter += 1
-        # Client sends to server's recv channel
-        ct = crypto_box(bytes(block), nonce, server_recv_pk, our_send_sk)
+        ct = crypto_box(bytes(blk), nonce, server_recv_pk, our_send_sk)
         sock.sendall(ct)
 
     def enc_recv():
@@ -147,22 +147,22 @@ def precreate_projects(host, port, client_pk, client_sk, projects):
         ct = read_exact(sock, ENCRYPTED_BLOCK_SIZE)
         nonce = counter_nonce(recv_counter)
         recv_counter += 1
-        # Client receives from server's send channel
-        block = crypto_box_open(ct, nonce, server_send_pk, our_recv_sk)
-        msg_len = struct.unpack("<H", block[:2])[0]
-        data = block[2:2 + msg_len]
+        blk = crypto_box_open(ct, nonce, server_send_pk, our_recv_sk)
+        msg_len = struct.unpack("<H", blk[:2])[0]
+        data = blk[2 : 2 + msg_len]
         header = data[:HEADER_SIZE]
         json_len = int(header.decode())
-        return json.loads(data[HEADER_SIZE:HEADER_SIZE + json_len].decode())
+        return json.loads(data[HEADER_SIZE : HEADER_SIZE + json_len].decode())
 
-    # Create each project
     for name in projects:
         msg_id += 1
-        enc_send({"id": msg_id, "method": "control/create/project",
-                  "params": {"name": name, "repository": "/demo", "ownerIdentity": IDENTITY}})
+        enc_send({
+            "id": msg_id,
+            "method": "control/create/project",
+            "params": {"name": name, "repository": "/demo", "ownerIdentity": IDENTITY},
+        })
         enc_recv()
 
-    # Exit cleanly
     msg_id += 1
     enc_send({"id": msg_id, "method": "control/exit", "params": {}})
     enc_recv()
@@ -170,10 +170,14 @@ def precreate_projects(host, port, client_pk, client_sk, projects):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=5222)
-    parser.add_argument("--project", action="append", default=[],
-                        help="Pre-create project(s) on the server")
+    parser = argparse.ArgumentParser(description="Start a mock Numscull demo server")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument(
+        "--project",
+        action="append",
+        default=[],
+        help="Pre-create project(s) on the server",
+    )
     args = parser.parse_args()
 
     config_dir = Path(tempfile.mkdtemp(prefix="numscull-demo-"))
@@ -190,17 +194,15 @@ def main():
         print("ERROR: mock server failed to start", file=sys.stderr)
         sys.exit(1)
 
-    # Pre-create projects if requested
     if args.project:
         try:
             precreate_projects("127.0.0.1", args.port, client_pk, client_sk, args.project)
         except Exception as e:
             print(f"WARNING: failed to pre-create projects: {e}", file=sys.stderr)
 
-    # Print config dir for callers to use
+    # Print config dir for the caller to consume via stdout
     print(str(config_dir), flush=True)
 
-    # Wait for server process (blocks until killed)
     try:
         proc.wait()
     except KeyboardInterrupt:

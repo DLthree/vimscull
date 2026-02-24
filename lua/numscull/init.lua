@@ -7,16 +7,30 @@ local notes = require("numscull.notes")
 local flow = require("numscull.flow")
 local client = require("numscull.client")
 
--- Demo logging helper (enabled via NUMSCULL_DEMO env var)
+-- Demo logging helper (enabled via NUMSCULL_DEMO env var).
+-- Writes to both the terminal (captured in asciinema .cast) and a log file
+-- so validation can use whichever source is more convenient.
+local _demo_log_path = nil
 local function demo_log(func_name, status)
-  if os.getenv("NUMSCULL_DEMO") == "1" then
-    -- Print the log message, then immediately clear it from the command line
-    -- The log will still appear in the recording but won't clutter the screen
-    local msg = string.format("[NUMSCULL_DEMO] %s: %s", func_name, status)
-    -- Use echo to print, then clear the command line
-    vim.api.nvim_echo({{msg, "Comment"}}, false, {})
-    -- Clear by moving cursor and printing spaces
-    vim.cmd("redraw")
+  if os.getenv("NUMSCULL_DEMO") ~= "1" then return end
+
+  local msg = string.format("[NUMSCULL_DEMO] %s: %s", func_name, status)
+
+  -- Terminal echo (appears in .cast output even though redraw clears it)
+  api.nvim_echo({{msg, "Comment"}}, false, {})
+  vim.cmd("redraw")
+
+  -- Append to log file (more reliable for automated validation)
+  if not _demo_log_path then
+    local cfg = os.getenv("NUMSCULL_CONFIG_DIR")
+    if cfg then _demo_log_path = cfg .. "/demo.log" end
+  end
+  if _demo_log_path then
+    local f = io.open(_demo_log_path, "a")
+    if f then
+      f:write(msg .. "\n")
+      f:close()
+    end
   end
 end
 
