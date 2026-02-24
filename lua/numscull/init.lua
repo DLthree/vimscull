@@ -10,8 +10,12 @@ local client = require("numscull.client")
 -- Demo logging helper (enabled via NUMSCULL_DEMO env var)
 local function demo_log(func_name, status)
   if os.getenv("NUMSCULL_DEMO") == "1" then
+    -- Print the log message, then immediately clear it from the command line
+    -- The log will still appear in the recording but won't clutter the screen
     local msg = string.format("[NUMSCULL_DEMO] %s: %s", func_name, status)
-    print(msg)
+    -- Use echo to print, then clear the command line
+    vim.api.nvim_echo({{msg, "Comment"}}, false, {})
+    -- Clear by moving cursor and printing spaces
     vim.cmd("redraw")
   end
 end
