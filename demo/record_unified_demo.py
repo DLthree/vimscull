@@ -105,33 +105,25 @@ def main():
         slow_send(child, ":NumscullProject demo-project\r", delay=0.05)
         pause(2)
         
-        # === SCENE 2: Add a note ===
+        # === SCENE 2: Add notes ===
         escape(child)
         pause(0.5)
         slow_send(child, ":10\r", delay=0.10)  # Go to line 10
         pause(1.5)
         
-        # Add note with text as argument (no prompt)
+        # Add first note with text as argument (no prompt)
         slow_send(child, ":NoteAdd Consider using argon2 instead of pbkdf2 #security\r", delay=0.04)
         pause(3)
         
-        # === SCENE 3: Edit the note (shows inline editor) ===
+        # Add second note on another line
         escape(child)
         pause(0.5)
-        slow_send(child, ":NoteEditOpen\r", delay=0.05)
-        pause(3)  # Give time to see the inline editor appear
+        slow_send(child, ":22\r", delay=0.10)  # Go to line 22
+        pause(1.5)
+        slow_send(child, ":NoteAdd Check return value for edge cases #bug\r", delay=0.04)
+        pause(3)
         
-        # Type new text in the inline editor buffer
-        slow_send(child, "iTODO: migrate to argon2id #security #migration", delay=0.04)
-        pause(1)
-        escape(child)
-        pause(0.5)
-        slow_send(child, ":w\r", delay=0.06)  # Save the inline buffer
-        pause(2)
-        slow_send(child, ":q\r", delay=0.06)  # Close the inline buffer
-        pause(2)
-        
-        # === SCENE 4: List notes ===
+        # === SCENE 3: List notes ===
         escape(child)
         pause(0.5)
         slow_send(child, ":NoteList\r", delay=0.05)
@@ -140,13 +132,13 @@ def main():
         slow_send(child, ":q\r", delay=0.06)
         pause(1)
         
-        # === SCENE 5: Create a flow ===
+        # === SCENE 4: Create a flow ===
         escape(child)
         pause(0.5)
         slow_send(child, ":FlowCreate Security Audit\r", delay=0.05)
         pause(2)
         
-        # === SCENE 6: Add nodes to flow with visual selection ===
+        # === SCENE 5: Add nodes to flow with visual selection ===
         # Select hash_password function name
         escape(child)
         pause(0.5)
@@ -173,7 +165,7 @@ def main():
         slow_send(child, "Blue\r", delay=0.05)
         pause(2)
         
-        # === SCENE 7: List flows ===
+        # === SCENE 6: List flows ===
         escape(child)
         pause(0.5)
         slow_send(child, ":FlowList\r", delay=0.05)
