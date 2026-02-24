@@ -122,11 +122,37 @@ def check_cast_file():
             print(f"  ❌ {key} content NOT FOUND")
             issues_found = True
     
+    # Check for demo logging output (NUMSCULL_DEMO markers)
+    demo_functions = [
+        "NumscullConnect",
+        "NumscullProject", 
+        "NoteAdd",
+        "NoteList",
+        "FlowCreate",
+        "FlowAddNode",
+        "FlowList",
+    ]
+    
+    print(f"\n🔍 Function call verification (NUMSCULL_DEMO logging):")
+    for func in demo_functions:
+        start_marker = f"[NUMSCULL_DEMO] {func}: START"
+        end_marker = f"[NUMSCULL_DEMO] {func}: END"
+        
+        if start_marker in full_output:
+            if end_marker in full_output:
+                print(f"  ✓ {func} called and completed (START/END found)")
+            else:
+                # Some functions (like List, Show) don't return immediately because they open buffers
+                print(f"  ✓ {func} called (START found, END may be deferred for UI functions)")
+        else:
+            print(f"  ❌ {func} NOT CALLED (no START marker)")
+            issues_found = True
+    
     # Note: Connection info may not be visible if it succeeds silently
     if "127.0.0.1" in full_output or "5222" in full_output:
-        print(f"  ✓ Connection info found")
+        print(f"\n  ✓ Connection info found")
     else:
-        print(f"  ℹ️  Connection info not visible (may have succeeded silently)")
+        print(f"\n  ℹ️  Connection info not visible (check NUMSCULL_DEMO logging above)")
     
     # Check for long gaps (>60s indicates potential hang)
     long_gaps = []

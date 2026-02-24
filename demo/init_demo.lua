@@ -1,6 +1,9 @@
 -- init_demo.lua - Realistic Neovim demo config for vimscull
 -- Compatible with Neovim 0.9.5+
 
+-- Enable demo logging
+vim.env.NUMSCULL_DEMO = "1"
+
 -- =========================
 -- Core settings
 -- =========================
