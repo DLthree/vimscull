@@ -13,6 +13,11 @@ M.config = {
   float_width = 0.8,        -- ratio of editor width
   float_height = 0.7,       -- ratio of editor height
   split_direction = "vertical", -- "vertical" or "horizontal" for two-pane layout
+  note_template = "",       -- Template for new notes
+  mappings = {
+    note_add = "<leader>na",
+    note_edit = "<leader>ne",
+  },
 }
 
 local ns = api.nvim_create_namespace("numscull_notes")
@@ -424,7 +429,7 @@ function M.list()
       if target and target.note then
         vim.cmd("wincmd p")
         pcall(api.nvim_win_set_cursor, 0, { target.line, 0 })
-        M.edit()
+        M.edit_open()
       end
     end,
   }))
@@ -516,8 +521,10 @@ local function extract_note_text(buf_lines)
 end
 
 --- Two-pane floating editor (A): code context pane + editable note pane.
-function M.edit_float(note, source_bufnr)
+--- is_new: if true, this is a new note being created (not an edit)
+function M.edit_float(note, source_bufnr, is_new)
   source_bufnr = source_bufnr or api.nvim_get_current_buf()
+  is_new = is_new or false
   local ctx = M.config.context_lines
   local note_line = note.line or 1
 
@@ -593,7 +600,7 @@ function M.edit_float(note, source_bufnr)
     note_win = api.nvim_open_win(note_buf, true, {
       relative = "editor", width = note_w, height = note_h,
       row = row, col = col + ctx_w + 2, style = "minimal", border = border,
-      title = " Edit Note ", title_pos = "center",
+      title = is_new and " Add Note " or " Edit Note ", title_pos = "center",
     })
   else
     ctx_win = api.nvim_open_win(ctx_buf, false, {
@@ -604,7 +611,7 @@ function M.edit_float(note, source_bufnr)
     note_win = api.nvim_open_win(note_buf, true, {
       relative = "editor", width = note_w, height = note_h,
       row = row + ctx_h + 2, col = col, style = "minimal", border = border,
-      title = " Edit Note ", title_pos = "center",
+      title = is_new and " Add Note " or " Edit Note ", title_pos = "center",
     })
   end
 
@@ -632,13 +639,14 @@ function M.edit_float(note, source_bufnr)
     local updated, err = M.set({
       location = note.location,
       text = new_text,
-      createdDate = note.createdDate,
+      createdDate = is_new and now or note.createdDate,
       modifiedDate = now,
     })
     if not updated then
       vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
       return
     end
+    loaded_bufs[source_bufnr] = true
     decorate_buf(source_bufnr)
     vim.notify("[numscull] note saved", vim.log.levels.INFO)
   end
@@ -646,6 +654,7 @@ function M.edit_float(note, source_bufnr)
   local kopts = { noremap = true, silent = true }
   api.nvim_buf_set_keymap(note_buf, "n", "<leader>s", "", vim.tbl_extend("force", kopts, { callback = save }))
   api.nvim_buf_set_keymap(note_buf, "n", "q", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
+  api.nvim_buf_set_keymap(note_buf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
 
   -- :w saves the note via BufWriteCmd
   api.nvim_create_autocmd("BufWriteCmd", {
@@ -658,8 +667,10 @@ function M.edit_float(note, source_bufnr)
 end
 
 --- Single-pane floating editor (B): note text with virt_lines code context.
-function M.edit_inline(note, source_bufnr)
+--- is_new: if true, this is a new note being created (not an edit)
+function M.edit_inline(note, source_bufnr, is_new)
   source_bufnr = source_bufnr or api.nvim_get_current_buf()
+  is_new = is_new or false
   local ctx = M.config.context_lines
   local note_line = note.line or 1
 
@@ -697,7 +708,7 @@ function M.edit_inline(note, source_bufnr)
   local win = api.nvim_open_win(note_buf, true, {
     relative = "editor", width = width, height = height,
     row = row, col = col, style = "minimal", border = border,
-    title = " Edit Note (inline) ", title_pos = "center",
+    title = is_new and " Add Note (inline) " or " Edit Note (inline) ", title_pos = "center",
   })
   vim.wo[win].cursorline = true
 
@@ -748,13 +759,14 @@ function M.edit_inline(note, source_bufnr)
     local updated, err = M.set({
       location = note.location,
       text = new_text,
-      createdDate = note.createdDate,
+      createdDate = is_new and now or note.createdDate,
       modifiedDate = now,
     })
     if not updated then
       vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
       return
     end
+    loaded_bufs[source_bufnr] = true
     decorate_buf(source_bufnr)
     vim.notify("[numscull] note saved", vim.log.levels.INFO)
   end
@@ -771,6 +783,7 @@ function M.edit_inline(note, source_bufnr)
   local kopts = { noremap = true, silent = true }
   api.nvim_buf_set_keymap(note_buf, "n", "<leader>s", "", vim.tbl_extend("force", kopts, { callback = save }))
   api.nvim_buf_set_keymap(note_buf, "n", "q", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
+  api.nvim_buf_set_keymap(note_buf, "n", "<Esc>", "", vim.tbl_extend("force", kopts, { callback = close_editor }))
   api.nvim_buf_set_keymap(note_buf, "n", "gf", "", vim.tbl_extend("force", kopts, { callback = jump_to_source }))
 
   -- :w saves the note via BufWriteCmd
@@ -860,7 +873,12 @@ function M.search_results(results, title)
     callback = function()
       local target = jump_map[api.nvim_win_get_cursor(0)[1]]
       if target and target.note then
-        M.edit_float(target.note)
+        vim.cmd("wincmd p")
+        if buf_fpath(api.nvim_get_current_buf()) ~= target.path then
+          vim.cmd("edit " .. fn.fnameescape(target.path))
+        end
+        pcall(api.nvim_win_set_cursor, 0, { target.line, 0 })
+        M.edit_open()
       end
     end,
   }))
@@ -881,10 +899,109 @@ function M.search_results(results, title)
   }))
 end
 
+-----------------------------------------------------------------------
+-- "Here" variants and enhanced add/edit
+-----------------------------------------------------------------------
+
+--- Add a note here (at cursor) with immediate editor and template support.
+--- Opens editor immediately with template pre-filled (no intermediate prompt).
+function M.add_here()
+  local bufnr = api.nvim_get_current_buf()
+  local uri = buf_uri(bufnr)
+  if not uri then
+    vim.notify("[numscull] buffer has no file", vim.log.levels.WARN)
+    return
+  end
+  local line = api.nvim_win_get_cursor(0)[1]
+  
+  -- Prepare template
+  local template = M.config.note_template or ""
+  
+  -- Create temporary note for editing
+  local temp_note = {
+    location = { fileId = { uri = uri }, line = line },
+    text = template,
+    author = "?",
+    createdDate = "",
+    modifiedDate = "",
+  }
+  
+  -- Open editor directly
+  local style = M.config.editor
+  if style == "inline" then
+    M.edit_inline(temp_note, bufnr, true) -- Pass true to indicate new note
+  else
+    M.edit_float(temp_note, bufnr, true) -- Pass true to indicate new note
+  end
+end
+
+--- Edit note here (at cursor) - finds closest note and opens editor.
+function M.edit_here()
+  M.edit_open()
+end
+
+--- Setup buffer-local mappings for quick note add/edit.
+local function setup_buffer_mappings(bufnr)
+  bufnr = bufnr or api.nvim_get_current_buf()
+  
+  -- Only set up mappings if buffer has a file
+  if not buf_uri(bufnr) then return end
+  
+  local opts = { buffer = bufnr, silent = true, noremap = true }
+  
+  if M.config.mappings and M.config.mappings.note_add then
+    vim.keymap.set('n', M.config.mappings.note_add, function()
+      M.add_here()
+    end, vim.tbl_extend('force', opts, { desc = 'Add note here' }))
+  end
+  
+  if M.config.mappings and M.config.mappings.note_edit then
+    vim.keymap.set('n', M.config.mappings.note_edit, function()
+      M.edit_here()
+    end, vim.tbl_extend('force', opts, { desc = 'Edit note here' }))
+  end
+  
+  -- Flow mappings (if flow module is available)
+  if M.config.mappings and M.config.mappings.flow_add_node_here then
+    local flow = require('numscull.flow')
+    vim.keymap.set('n', M.config.mappings.flow_add_node_here, function()
+      flow.add_node_here()
+    end, vim.tbl_extend('force', opts, { desc = 'Add flow node here' }))
+  end
+  
+  if M.config.mappings and M.config.mappings.flow_select then
+    local flow = require('numscull.flow')
+    vim.keymap.set('n', M.config.mappings.flow_select, function()
+      flow.select()
+    end, vim.tbl_extend('force', opts, { desc = 'Select flow' }))
+  end
+end
+
+--- Expose setup_buffer_mappings
+M.setup_buffer_mappings = setup_buffer_mappings
+
 --- Configure (icon, max_line_len, editor, etc.).
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   hl_setup()
+  
+  -- Setup buffer mappings on BufEnter if any mapping is configured
+  local has_mappings = M.config.mappings and (
+    M.config.mappings.note_add or 
+    M.config.mappings.note_edit or
+    M.config.mappings.flow_add_node_here or
+    M.config.mappings.flow_select
+  )
+  
+  if has_mappings then
+    local grp = api.nvim_create_augroup("NumscullMappings", { clear = true })
+    api.nvim_create_autocmd("BufEnter", {
+      group = grp,
+      callback = function(ev)
+        setup_buffer_mappings(ev.buf)
+      end,
+    })
+  end
 end
 
 return M

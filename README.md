@@ -76,8 +76,24 @@ require("numscull").setup({
   max_line_len = 120,         -- truncate virtual lines beyond this width
   auto_connect = false,       -- connect on setup (requires identity + config_dir)
   auto_fetch   = true,        -- fetch notes for each buffer on BufReadPost
+  quick_connect_auto = false, -- auto-connect from .numscull/config on startup
+  note_template = "",         -- template for new notes
+  mappings = {
+    note_add = "<leader>na",           -- quick add note
+    note_edit = "<leader>ne",          -- quick edit note
+    flow_add_node_here = nil,          -- optional: add flow node at cursor
+    flow_select = nil,                 -- optional: select flow
+  },
 })
 ```
+
+### Quick workflow tips
+
+- Create `.numscull/config` at project root with `host=`, `port=`, `project=` lines, then use `:NumscullQuickConnect` to connect from config.
+- Enable `quick_connect_auto = true` to auto-connect on startup.
+- Use `:NoteAddHere` to open the editor immediately (no prompts).
+- Use `:FlowAddNodeHere` to add flow nodes with smart defaults (extracts function name from cursor).
+- Add `require('numscull').status()` to your statusline to show connection state and active flow.
 
 ## Commands
 
@@ -86,6 +102,7 @@ require("numscull").setup({
 | Command | Description |
 |---|---|
 | `:NumscullConnect [host] [port]` | Connect to Numscull server and initialize (encrypted handshake) |
+| `:NumscullQuickConnect[!]` | Connect from `.numscull/config` at project root; use `!` to save changes |
 | `:NumscullDisconnect` | Disconnect from server |
 | `:NumscullProject <name>` | Switch active project |
 | `:NumscullListProjects` | List available projects |
@@ -95,7 +112,9 @@ require("numscull").setup({
 | Command | Description |
 |---|---|
 | `:NoteAdd [text]` | Add note at cursor (prompts if no text given) |
+| `:NoteAddHere` | Add note with immediate editor (no prompts, uses template) |
 | `:NoteEdit` | Edit the note closest to the cursor |
+| `:NoteEditHere` | Edit the closest note in full editor |
 | `:NoteDelete` | Delete the note closest to the cursor (with confirmation) |
 | `:NoteShow` | Echo the full text of the closest note |
 | `:NoteList` | Open a scratch buffer listing notes; `<CR>` jumps to line |
@@ -114,6 +133,7 @@ Use `\n` in note text to create multi-line annotations.
 | `:FlowDelete` | Delete the active flow (with confirmation) |
 | `:FlowSelect` | Open floating window to pick, create, or delete flows |
 | `:FlowAddNode [flow_id]` | Add visual selection as a node to the active flow (prompts for color) |
+| `:FlowAddNodeHere` | Add node at cursor with smart defaults (function name, last color) |
 | `:FlowDeleteNode` | Remove the closest node near cursor from the active flow |
 | `:FlowNext` | Jump to the next node in the active flow |
 | `:FlowPrev` | Jump to the previous node in the active flow |

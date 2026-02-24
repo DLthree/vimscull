@@ -11,6 +11,7 @@ local state = {
   active_flow_id = nil, -- currently selected flow (server-side infoId)
   cached_flow = nil,    -- cached Flow object for the active flow
   node_order = {},      -- sorted list of {node_id, node} for navigation
+  last_colors = {},     -- flow_id -> last used color (for defaults)
 }
 
 -- Color palette for flow node highlights
@@ -23,11 +24,18 @@ M.palette = {
   { name = "Magenta", hl = "FlowMagenta", fg = "#ff55ff", bg = "#3a153a" },
 }
 
+M.config = {}
+
 -- Map hex colors to highlight group names (created on demand)
 local hex_hl_cache = {}
 
+local function get_palette()
+  return M.config.palette or M.palette
+end
+
 local function hl_setup()
-  for _, c in ipairs(M.palette) do
+  local palette = get_palette()
+  for _, c in ipairs(palette) do
     api.nvim_set_hl(0, c.hl, { fg = c.fg, bg = c.bg, default = true })
   end
   api.nvim_set_hl(0, "FlowSelect", { link = "PmenuSel", default = true })
@@ -39,7 +47,8 @@ end
 local function hl_for_hex(hex)
   if not hex or hex == "" then hex = "#888888" end
   -- Check if it matches a palette entry
-  for _, c in ipairs(M.palette) do
+  local palette = get_palette()
+  for _, c in ipairs(palette) do
     if c.fg == hex or c.hl == hex then return c.hl end
   end
   if hex_hl_cache[hex] then return hex_hl_cache[hex] end
@@ -134,6 +143,8 @@ local function decorate_buf(bufnr)
         end_row = row,
         end_col = col_e,
         hl_group = hl,
+        right_gravity = false,
+        end_right_gravity = false,
       })
     end
   end
@@ -149,7 +160,8 @@ local function decorate_all_bufs()
 end
 
 --- Setup highlight groups and autocommands for flow decoration.
-function M.setup()
+function M.setup(opts)
+  M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   hl_setup()
   local grp = api.nvim_create_augroup("NumscullFlows", { clear = true })
   api.nvim_create_autocmd("BufReadPost", {
@@ -394,14 +406,15 @@ function M.add_node_visual(flow_id)
   end
 
   local color_names = {}
-  for _, c in ipairs(M.palette) do
+  local palette = get_palette()
+  for _, c in ipairs(palette) do
     color_names[#color_names + 1] = c.name
   end
 
   vim.ui.select(color_names, { prompt = "Pick node color:" }, function(choice)
     if not choice then return end
     local color = "#888888"
-    for _, c in ipairs(M.palette) do
+    for _, c in ipairs(palette) do
       if c.name == choice then color = c.fg; break end
     end
     vim.ui.input({ prompt = "Node note: " }, function(note)
@@ -823,6 +836,170 @@ function M.show(flow_id)
       end
     end,
   }))
+end
+
+-----------------------------------------------------------------------
+-- Enhanced node creation with smart defaults
+-----------------------------------------------------------------------
+
+--- Try to get function/symbol name at cursor using Treesitter or LSP.
+--- Returns symbol name or nil.
+local function get_symbol_at_cursor()
+  -- Try Treesitter first
+  local ok, ts_utils = pcall(require, 'nvim-treesitter.ts_utils')
+  if ok then
+    local node = ts_utils.get_node_at_cursor()
+    if node then
+      local node_type = node:type()
+      -- Look for function-like nodes
+      if node_type:match("function") or node_type:match("method") or node_type:match("class") then
+        -- Try to get the name child
+        for child in node:iter_children() do
+          if child:type():match("name") or child:type():match("identifier") then
+            local name_text = vim.treesitter.get_node_text(child, 0)
+            if name_text and name_text ~= "" then
+              return name_text
+            end
+          end
+        end
+      end
+    end
+  end
+  
+  -- Fallback: try LSP document symbol at cursor
+  local params = vim.lsp.util.make_position_params()
+  local results = vim.lsp.buf_request_sync(0, 'textDocument/documentSymbol', params, 1000)
+  if results then
+    for _, result in pairs(results) do
+      if result.result then
+        -- Find symbol containing cursor position
+        local cursor = api.nvim_win_get_cursor(0)
+        for _, symbol in ipairs(result.result) do
+          if symbol.location and symbol.location.range then
+            local range = symbol.location.range
+            if cursor[1] - 1 >= range.start.line and cursor[1] - 1 <= range['end'].line then
+              return symbol.name
+            end
+          elseif symbol.range then
+            local range = symbol.range
+            if cursor[1] - 1 >= range.start.line and cursor[1] - 1 <= range['end'].line then
+              return symbol.name
+            end
+          end
+        end
+      end
+    end
+  end
+  
+  return nil
+end
+
+--- Get default node name for current cursor position.
+--- Uses symbol name if available, otherwise current word under cursor.
+local function get_default_node_name()
+  local symbol = get_symbol_at_cursor()
+  if symbol then
+    return symbol
+  end
+  
+  -- Fallback to current word under cursor
+  local word = fn.expand("<cword>")
+  if word and word ~= "" then
+    return word
+  end
+  
+  -- Final fallback to filename:line
+  local bufnr = api.nvim_get_current_buf()
+  local name = api.nvim_buf_get_name(bufnr)
+  if name == "" then return "untitled" end
+  local filename = fn.fnamemodify(name, ":t")
+  local line = api.nvim_win_get_cursor(0)[1]
+  return string.format("%s:%d", filename, line)
+end
+
+--- Get last used color for a flow, or default color.
+local function get_default_color(flow_id)
+  if flow_id and state.last_colors[flow_id] then
+    return state.last_colors[flow_id]
+  end
+  -- Return first palette color as default
+  local palette = get_palette()
+  return palette[1].fg
+end
+
+--- Add node here (at cursor) with smart defaults.
+--- Automatically determines location, infers name from context, uses last color.
+function M.add_node_here()
+  if not client.is_connected() then
+    vim.notify("[numscull] not connected", vim.log.levels.ERROR)
+    return
+  end
+  
+  local flow_id = state.active_flow_id
+  if not flow_id then
+    vim.notify("[numscull] no active flow — create one first", vim.log.levels.WARN)
+    return
+  end
+  
+  local loc = M.location_at_cursor()
+  if not loc then
+    vim.notify("[numscull] buffer has no file", vim.log.levels.WARN)
+    return
+  end
+  
+  -- Get smart defaults
+  local default_name = get_default_node_name()
+  local default_color = get_default_color(flow_id)
+  
+  -- Prompt for name with default
+  vim.ui.input({ 
+    prompt = "Node name: ",
+    default = default_name,
+  }, function(name)
+    if not name or name == "" then name = default_name end
+    
+    -- Prompt for color with default
+    local color_names = {}
+    local palette = get_palette()
+    for _, c in ipairs(palette) do
+      color_names[#color_names + 1] = c.name
+    end
+    
+    -- Find default color index
+    local default_idx = 1
+    for i, c in ipairs(palette) do
+      if c.fg == default_color then
+        default_idx = i
+        break
+      end
+    end
+    
+    vim.ui.select(color_names, {
+      prompt = "Pick node color:",
+      format_item = function(item)
+        return item .. (palette[default_idx].name == item and " (default)" or "")
+      end,
+    }, function(choice)
+      local color = default_color
+      if choice then
+        for _, c in ipairs(palette) do
+          if c.name == choice then color = c.fg; break end
+        end
+      end
+      
+      -- Store last used color
+      state.last_colors[flow_id] = color
+      
+      vim.ui.input({ prompt = "Node note (optional): " }, function(note)
+        local result, err = M.add_node(loc, note or "", color, { flowId = flow_id, name = name })
+        if err then
+          vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+          return
+        end
+        vim.notify(string.format("[numscull] node '%s' added", name), vim.log.levels.INFO)
+      end)
+    end)
+  end)
 end
 
 return M

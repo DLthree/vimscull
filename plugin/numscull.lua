@@ -64,6 +64,20 @@ vim.api.nvim_create_user_command("NumscullProject", function(opts)
   end
 end, { nargs = 1, desc = "Change active project" })
 
+-- Quick connect commands
+vim.api.nvim_create_user_command("NumscullQuickConnect", function(opts)
+  local save = opts.bang -- Use ! to save config
+  
+  local ok, err = numscull.quick_connect(save)
+  if not ok then
+    vim.notify("[numscull] " .. tostring(err), vim.log.levels.ERROR)
+  else
+    local msg = "[numscull] connected from .numscull/config"
+    if save then msg = msg .. " (saved)" end
+    vim.notify(msg, vim.log.levels.INFO)
+  end
+end, { bang = true, desc = "Connect from .numscull/config - use ! to save changes" })
+
 vim.api.nvim_create_user_command("NumscullListProjects", function()
   local result, err = numscull.list_projects()
   if err then
@@ -85,9 +99,17 @@ vim.api.nvim_create_user_command("NoteAdd", function(opts)
   numscull.add(opts.args ~= "" and opts.args or nil)
 end, { nargs = "?", desc = "Add note at cursor" })
 
+vim.api.nvim_create_user_command("NoteAddHere", function()
+  numscull.add_here()
+end, { desc = "Add note here with immediate editor" })
+
 vim.api.nvim_create_user_command("NoteEdit", function()
   numscull.edit()
 end, { desc = "Edit closest note (quick inline prompt)" })
+
+vim.api.nvim_create_user_command("NoteEditHere", function()
+  numscull.edit_here()
+end, { desc = "Edit closest note here in editor" })
 
 vim.api.nvim_create_user_command("NoteEditOpen", function()
   numscull.edit_open()
@@ -192,6 +214,10 @@ vim.api.nvim_create_user_command("FlowAddNode", function(opts)
   local flow_id = opts.args ~= "" and tonumber(opts.args) or nil
   numscull.flow_add_node_visual(flow_id)
 end, { range = true, nargs = "?", desc = "Add visual selection as a node to the active flow" })
+
+vim.api.nvim_create_user_command("FlowAddNodeHere", function()
+  numscull.flow_add_node_here()
+end, { desc = "Add node here with smart defaults (name from symbol, last color)" })
 
 vim.api.nvim_create_user_command("FlowDeleteNode", function()
   numscull.flow_delete_node()
