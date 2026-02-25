@@ -84,3 +84,13 @@ This runs: Connect → ListProjects → CreateProject (if needed) → ChangeProj
 
 See `mockscull/README.md` for full protocol documentation and module/method tables.
 
+## Numscull test
+
+```bash
+./numscull/zig-out/bin/numscull_native -r vimscull/mockscull/sample-config/ -p 5000 --no-pidfile
+```
+
+
+* Config dir: same as above
+* User: python-client
+* Project: test-proj
